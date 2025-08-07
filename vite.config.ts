@@ -50,15 +50,8 @@ export default defineConfig(({ command }) => ({
         },
       },
     },
-    // Optimize for production
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: false,
-        drop_debugger: true,
-        pure_funcs: ['console.log'],
-      },
-    },
+    // Disable minification to prevent React import issues
+    minify: false,
     // Increase chunk size warning limit for better performance
     chunkSizeWarningLimit: 1000,
   },
