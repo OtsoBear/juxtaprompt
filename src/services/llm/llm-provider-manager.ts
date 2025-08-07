@@ -1,11 +1,12 @@
 // src/services/llm/llm-provider-manager.ts
-import type { 
-  ILLMProvider, 
-  LLMProvider, 
-  LLMRequest, 
-  LLMStreamChunk, 
+import type {
+  ILLMProvider,
+  LLMProvider,
+  LLMRequest,
+  LLMStreamChunk,
   LLMConfig,
-  ValidationResult 
+  ValidationResult,
+  AvailableModelsResult
 } from '@/types/llm';
 import { LLMProviderError } from './base-llm-provider';
 
@@ -128,6 +129,47 @@ export class LLMProviderManager {
    */
   public getActiveRequestIds(): string[] {
     return Array.from(this.activeRequests.keys());
+  }
+
+  /**
+   * Get available models for a specific provider
+   */
+  public async getAvailableModels(
+    providerName: LLMProvider,
+    apiKey: string,
+    baseUrl?: string
+  ): Promise<AvailableModelsResult> {
+    const provider = this.getProvider(providerName);
+    if (!provider) {
+      throw new LLMProviderError({
+        code: 'PROVIDER_NOT_FOUND',
+        message: `Provider '${providerName}' is not registered`,
+        retryable: false,
+      });
+    }
+
+    return provider.getAvailableModels(apiKey, baseUrl);
+  }
+
+  /**
+   * Clear model cache for a specific provider
+   */
+  public clearModelCache(providerName: LLMProvider): void {
+    const provider = this.getProvider(providerName);
+    if (provider && 'clearModelCache' in provider) {
+      (provider as any).clearModelCache();
+    }
+  }
+
+  /**
+   * Clear model cache for all providers
+   */
+  public clearAllModelCaches(): void {
+    for (const provider of this.providers.values()) {
+      if ('clearModelCache' in provider) {
+        (provider as any).clearModelCache();
+      }
+    }
   }
 
   /**

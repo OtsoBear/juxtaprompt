@@ -1,6 +1,6 @@
 // src/services/llm/providers/gemini-provider.ts
 import { BaseLLMProvider, LLMProviderError } from '../base-llm-provider';
-import type { LLMRequest, LLMStreamChunk, ValidationResult } from '@/types/llm';
+import type { LLMRequest, LLMStreamChunk, ValidationResult, ModelInfo } from '@/types/llm';
 import { validateGeminiResponse, type GeminiStreamChunk } from '@/schemas/llm-schemas';
 
 /**
@@ -278,6 +278,160 @@ export class GeminiProvider extends BaseLLMProvider {
       response.status,
       details
     );
+  }
+
+  /**
+   * Fetch available models from Gemini API
+   */
+  protected async fetchAvailableModels(apiKey: string, baseUrl?: string): Promise<ModelInfo[]> {
+    const url = `${baseUrl || 'https://generativelanguage.googleapis.com/v1beta'}/models`;
+    
+    try {
+      const response = await fetch(`${url}?key=${apiKey}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Juxtaprompt/1.0.0',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.models || !Array.isArray(data.models)) {
+        throw new Error('Invalid response format from Gemini models API');
+      }
+
+      // Filter and map Gemini models to our ModelInfo format
+      const models: ModelInfo[] = data.models
+        .filter((model: any) => {
+          // Only include generative models that support generateContent
+          return model.name &&
+                 model.supportedGenerationMethods?.includes('generateContent') &&
+                 !model.name.includes('embedding');
+        })
+        .map((model: any) => {
+          const modelId = model.name.replace('models/', '');
+          return {
+            id: modelId,
+            name: this.getModelDisplayName(modelId),
+            description: model.description || this.getModelDescription(modelId),
+            contextLength: this.getModelContextLength(modelId),
+            maxOutputTokens: this.getModelMaxOutputTokens(modelId),
+            pricing: this.getModelPricing(modelId),
+          };
+        })
+        .sort((a: ModelInfo, b: ModelInfo) => {
+          // Sort by preference: gemini-1.5-pro first, then flash, then others
+          const getModelPriority = (id: string) => {
+            if (id.includes('gemini-1.5-pro')) return 1;
+            if (id.includes('gemini-1.5-flash')) return 2;
+            if (id.includes('gemini-1.0-pro')) return 3;
+            return 4;
+          };
+          return getModelPriority(a.id) - getModelPriority(b.id);
+        });
+
+      return models;
+    } catch (error) {
+      console.error('Failed to fetch Gemini models:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get fallback models when API call fails
+   */
+  protected getFallbackModels(): ModelInfo[] {
+    return [
+      {
+        id: 'gemini-1.5-pro',
+        name: 'Gemini 1.5 Pro',
+        description: 'Most capable model for complex reasoning tasks',
+        contextLength: 2000000,
+        maxOutputTokens: 8192,
+        pricing: { input: 1.25, output: 5.0 },
+      },
+      {
+        id: 'gemini-1.5-flash',
+        name: 'Gemini 1.5 Flash',
+        description: 'Fast and efficient model for everyday tasks',
+        contextLength: 1000000,
+        maxOutputTokens: 8192,
+        pricing: { input: 0.075, output: 0.3 },
+      },
+      {
+        id: 'gemini-1.0-pro',
+        name: 'Gemini 1.0 Pro',
+        description: 'Previous generation model',
+        contextLength: 32768,
+        maxOutputTokens: 2048,
+        pricing: { input: 0.5, output: 1.5 },
+      },
+    ];
+  }
+
+  /**
+   * Get model display name
+   */
+  private getModelDisplayName(modelId: string): string {
+    const displayNames: Record<string, string> = {
+      'gemini-1.5-pro': 'Gemini 1.5 Pro',
+      'gemini-1.5-flash': 'Gemini 1.5 Flash',
+      'gemini-1.0-pro': 'Gemini 1.0 Pro',
+    };
+    return displayNames[modelId] || modelId;
+  }
+
+  /**
+   * Get model description
+   */
+  private getModelDescription(modelId: string): string {
+    const descriptions: Record<string, string> = {
+      'gemini-1.5-pro': 'Most capable model for complex reasoning tasks',
+      'gemini-1.5-flash': 'Fast and efficient model for everyday tasks',
+      'gemini-1.0-pro': 'Previous generation model',
+    };
+    return descriptions[modelId] || 'Google Gemini language model';
+  }
+
+  /**
+   * Get model context length
+   */
+  private getModelContextLength(modelId: string): number {
+    const contextLengths: Record<string, number> = {
+      'gemini-1.5-pro': 2000000,
+      'gemini-1.5-flash': 1000000,
+      'gemini-1.0-pro': 32768,
+    };
+    return contextLengths[modelId] || 32768;
+  }
+
+  /**
+   * Get model max output tokens
+   */
+  private getModelMaxOutputTokens(modelId: string): number {
+    const maxOutputTokens: Record<string, number> = {
+      'gemini-1.5-pro': 8192,
+      'gemini-1.5-flash': 8192,
+      'gemini-1.0-pro': 2048,
+    };
+    return maxOutputTokens[modelId] || 2048;
+  }
+
+  /**
+   * Get model pricing (per 1M tokens)
+   */
+  private getModelPricing(modelId: string): { input: number; output: number } {
+    const pricing: Record<string, { input: number; output: number }> = {
+      'gemini-1.5-pro': { input: 1.25, output: 5.0 },
+      'gemini-1.5-flash': { input: 0.075, output: 0.3 },
+      'gemini-1.0-pro': { input: 0.5, output: 1.5 },
+    };
+    return pricing[modelId] || { input: 0.5, output: 1.5 };
   }
 
   /**

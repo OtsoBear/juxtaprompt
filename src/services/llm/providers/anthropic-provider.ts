@@ -1,6 +1,6 @@
 // src/services/llm/providers/anthropic-provider.ts
 import { BaseLLMProvider, LLMProviderError } from '../base-llm-provider';
-import type { LLMRequest, LLMStreamChunk, ValidationResult } from '@/types/llm';
+import type { LLMRequest, LLMStreamChunk, ValidationResult, ModelInfo } from '@/types/llm';
 import { validateAnthropicResponse, type AnthropicStreamChunk } from '@/schemas/llm-schemas';
 
 /**
@@ -269,6 +269,65 @@ export class AnthropicProvider extends BaseLLMProvider {
       response.status,
       details
     );
+  }
+
+  /**
+   * Fetch available models from Anthropic API
+   * Note: Anthropic doesn't provide a public models endpoint, so we return static models
+   */
+  protected async fetchAvailableModels(apiKey: string, baseUrl?: string): Promise<ModelInfo[]> {
+    // Anthropic doesn't have a public models API endpoint
+    // We could potentially make a test request to validate the API key
+    // but for now, we'll return the static models
+    return this.getFallbackModels();
+  }
+
+  /**
+   * Get fallback models when API call fails
+   */
+  protected getFallbackModels(): ModelInfo[] {
+    return [
+      {
+        id: 'claude-3-5-sonnet-20241022',
+        name: 'Claude 3.5 Sonnet',
+        description: 'Most intelligent model, ideal for complex tasks',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 3.0, output: 15.0 },
+      },
+      {
+        id: 'claude-3-5-haiku-20241022',
+        name: 'Claude 3.5 Haiku',
+        description: 'Fastest model for everyday tasks',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 0.8, output: 4.0 },
+      },
+      {
+        id: 'claude-3-opus-20240229',
+        name: 'Claude 3 Opus',
+        description: 'Powerful model for highly complex tasks',
+        contextLength: 200000,
+        maxOutputTokens: 4096,
+        pricing: { input: 15.0, output: 75.0 },
+      },
+      {
+        id: 'claude-3-sonnet-20240229',
+        name: 'Claude 3 Sonnet',
+        description: 'Balance of intelligence and speed',
+        contextLength: 200000,
+        maxOutputTokens: 4096,
+        pricing: { input: 3.0, output: 15.0 },
+      },
+      {
+        id: 'claude-3-haiku-20240307',
+        name: 'Claude 3 Haiku',
+        description: 'Fast and cost-effective model',
+        contextLength: 200000,
+        maxOutputTokens: 4096,
+        pricing: { input: 0.25, output: 1.25 },
+      },
+    ];
   }
 
   /**

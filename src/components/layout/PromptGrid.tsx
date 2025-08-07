@@ -1,11 +1,16 @@
 // src/components/layout/PromptGrid.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Plus, X, GripVertical, Maximize2, Minimize2 } from 'lucide-react';
 import type { PromptGridProps } from '@/types/app';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 
 /**
  * Responsive grid component for displaying prompts and responses
- * Features manual size controls and responsive layout
+ * Features slider-based grid controls with auto-generated prompts
  */
 export const PromptGrid: React.FC<PromptGridProps> = ({
   prompts,
@@ -16,7 +21,10 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
   isLoading,
   className = '',
 }) => {
-  const [gridColumns, setGridColumns] = useState(2);
+  const [gridColumns, setGridColumns] = useState(4);
+  const [gridRows, setGridRows] = useState(2);
+  const [fontSize, setFontSize] = useState(12);
+  const [maxHeight, setMaxHeight] = useState(6);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpanded = useCallback((id: string) => {
@@ -31,56 +39,144 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
     });
   }, []);
 
-  const getGridCols = () => {
-    switch (gridColumns) {
-      case 1: return 'grid-cols-1';
-      case 2: return 'grid-cols-1 md:grid-cols-2';
-      case 3: return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
-      case 4: return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-      default: return 'grid-cols-1 md:grid-cols-2';
+  // Auto-generate prompts based on grid dimensions
+  useEffect(() => {
+    const targetPromptCount = gridColumns * gridRows;
+    const currentPromptCount = prompts.length;
+    
+    if (targetPromptCount > currentPromptCount) {
+      // Add more prompts
+      const promptsToAdd = targetPromptCount - currentPromptCount;
+      for (let i = 0; i < promptsToAdd; i++) {
+        onPromptAdd('', `Prompt ${currentPromptCount + i + 1}`);
+      }
+    } else if (targetPromptCount < currentPromptCount) {
+      // Remove excess prompts (from the end)
+      const promptsToDelete = prompts.slice(targetPromptCount);
+      
+      // Remove the excess prompts
+      promptsToDelete.forEach(prompt => {
+        onPromptRemove(prompt.id);
+      });
     }
-  };
+  }, [gridColumns, gridRows, prompts.length, onPromptAdd, onPromptRemove]);
+
+  const handleColumnsChange = useCallback((value: number[]) => {
+    setGridColumns(value[0]);
+  }, []);
+
+  const handleRowsChange = useCallback((value: number[]) => {
+    setGridRows(value[0]);
+  }, []);
+
+  const handleFontSizeChange = useCallback((value: number[]) => {
+    setFontSize(value[0]);
+  }, []);
+
+  const handleMaxHeightChange = useCallback((value: number[]) => {
+    setMaxHeight(value[0]);
+  }, []);
+
+  // Calculate textarea height based on content and max height setting
+  const getTextareaHeight = useCallback((content: string) => {
+    if (!content) return { height: '2rem' }; // 32px minimum
+    const lines = content.split('\n').length;
+    const estimatedLines = Math.max(lines, Math.ceil(content.length / 50)); // Estimate based on content length
+    const actualLines = Math.min(estimatedLines, maxHeight);
+    const heightInRem = Math.max(2, actualLines * 1.5); // 1.5rem per line, minimum 2rem
+    return { height: `${heightInRem}rem` };
+  }, [maxHeight]);
 
   const getResponseForPrompt = (promptId: string) => {
     return responses.find(response => response.promptId === promptId);
   };
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {/* Grid Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-xl font-semibold">Prompt Comparison</h2>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-muted-foreground">Columns:</span>
-            {[1, 2, 3, 4].map(cols => (
-              <button
-                key={cols}
-                onClick={() => setGridColumns(cols)}
-                className={`px-2 py-1 text-xs rounded transition-colors ${
-                  gridColumns === cols
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted hover:bg-muted/80'
-                }`}
-              >
-                {cols}
-              </button>
-            ))}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Grid</h2>
+          <div className="text-xs text-muted-foreground">
+            {gridColumns} × {gridRows} = {gridColumns * gridRows}
           </div>
         </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Width Control */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Width</label>
+              <span className="text-xs text-muted-foreground">{gridColumns}</span>
+            </div>
+            <Slider
+              value={[gridColumns]}
+              onValueChange={handleColumnsChange}
+              min={1}
+              max={20}
+              step={1}
+              className="w-full"
+            />
+          </div>
 
-        <button
-          onClick={() => onPromptAdd()}
-          disabled={isLoading}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add Prompt</span>
-        </button>
+          {/* Height Control */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Height</label>
+              <span className="text-xs text-muted-foreground">{gridRows}</span>
+            </div>
+            <Slider
+              value={[gridRows]}
+              onValueChange={handleRowsChange}
+              min={1}
+              max={10}
+              step={1}
+              className="w-full"
+            />
+          </div>
+
+          {/* Font Size Control */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Font</label>
+              <span className="text-xs text-muted-foreground">{fontSize}px</span>
+            </div>
+            <Slider
+              value={[fontSize]}
+              onValueChange={handleFontSizeChange}
+              min={8}
+              max={16}
+              step={1}
+              className="w-full"
+            />
+          </div>
+
+          {/* Max Height Control */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Max Height</label>
+              <span className="text-xs text-muted-foreground">{maxHeight} lines</span>
+            </div>
+            <Slider
+              value={[maxHeight]}
+              onValueChange={handleMaxHeightChange}
+              min={2}
+              max={20}
+              step={1}
+              className="w-full"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Grid */}
-      <div className={`grid gap-6 ${getGridCols()}`}>
+      <div
+        className="grid gap-1"
+        style={{
+          gridTemplateColumns: `repeat(${gridColumns}, minmax(150px, 1fr))`,
+          gap: '2px'
+        }}
+      >
         {prompts.map((prompt, index) => {
           const response = getResponseForPrompt(prompt.id);
           const isExpanded = expandedItems.has(prompt.id);
@@ -88,115 +184,85 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
           const hasError = !!response?.response.error;
 
           return (
-            <div
+            <Card
               key={prompt.id}
-              className={`border rounded-lg transition-all duration-200 ${
+              className={`transition-all duration-200 ${
                 isExpanded ? 'col-span-full' : ''
-              } ${hasError ? 'border-destructive' : 'border-border'}`}
+              } ${hasError ? 'border-destructive' : ''}`}
             >
-              {/* Card Header */}
-              <div className="flex items-center justify-between p-4 border-b">
-                <div className="flex items-center space-x-2">
-                  <GripVertical className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Prompt {index + 1}</span>
-                  {prompt.title && (
-                    <span className="text-sm text-muted-foreground">
-                      - {prompt.title}
-                    </span>
+              {/* Card Header - Minimal */}
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0.5 pb-0">
+                <span className="text-xs text-muted-foreground">
+                  {Math.floor(index / gridColumns) + 1},{(index % gridColumns) + 1}
+                </span>
+                <Button
+                  onClick={() => toggleExpanded(prompt.id)}
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4"
+                  title={isExpanded ? 'Minimize' : 'Maximize'}
+                >
+                  {isExpanded ? (
+                    <Minimize2 className="h-2 w-2" />
+                  ) : (
+                    <Maximize2 className="h-2 w-2" />
                   )}
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => toggleExpanded(prompt.id)}
-                    className="p-1 hover:bg-muted rounded transition-colors"
-                    title={isExpanded ? 'Minimize' : 'Maximize'}
-                  >
-                    {isExpanded ? (
-                      <Minimize2 className="h-4 w-4" />
-                    ) : (
-                      <Maximize2 className="h-4 w-4" />
-                    )}
-                  </button>
-
-                  {prompts.length > 1 && (
-                    <button
-                      onClick={() => onPromptRemove(prompt.id)}
-                      disabled={isLoading}
-                      className="p-1 hover:bg-destructive/10 text-destructive rounded transition-colors disabled:opacity-50"
-                      title="Remove prompt"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
+                </Button>
+              </CardHeader>
 
               {/* Prompt Input */}
-              <div className="p-4 space-y-4">
+              <CardContent className="p-0.5 space-y-1">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Prompt
-                  </label>
-                  <textarea
+                  <Textarea
                     value={prompt.content}
                     onChange={(e) => onPromptChange(prompt.id, e.target.value)}
                     disabled={isLoading}
-                    placeholder="Enter your prompt here..."
-                    className={`w-full p-3 border rounded-lg resize-none transition-all focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isExpanded ? 'h-32' : 'h-24'
-                    }`}
+                    placeholder="Prompt..."
+                    className="resize-none p-1"
+                    style={{
+                      fontSize: `${fontSize}px`,
+                      ...(isExpanded ? { height: '8rem' } : getTextareaHeight(prompt.content))
+                    }}
                   />
                 </div>
 
                 {/* Response Section */}
                 {response && (
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium">
-                        Response
-                      </label>
-                      <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                        {isStreaming && (
-                          <div className="flex items-center space-x-1">
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span>Streaming...</span>
-                          </div>
-                        )}
-                        {response.response.metadata.tokenCount && (
-                          <span>{response.response.metadata.tokenCount} tokens</span>
-                        )}
-                        <span>{response.response.metadata.model}</span>
-                      </div>
+                      {isStreaming && (
+                        <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                      )}
+                      {response.response.metadata.tokenCount && (
+                        <span className="text-xs text-muted-foreground">{response.response.metadata.tokenCount}t</span>
+                      )}
                     </div>
 
                     <div
-                      className={`p-3 border rounded-lg bg-muted/30 ${
+                      className={`p-1 border rounded bg-muted/30 ${
                         hasError ? 'border-destructive bg-destructive/5' : ''
-                      } ${isExpanded ? 'min-h-48' : 'min-h-32'}`}
+                      }`}
+                      style={
+                        isExpanded
+                          ? { minHeight: '12rem' }
+                          : { minHeight: getTextareaHeight(response.response.content || '').height }
+                      }
                     >
                       {hasError ? (
-                        <div className="text-destructive">
-                          <div className="font-medium mb-1">Error</div>
-                          <div className="text-sm">
-                            {response.response.error?.message || 'Unknown error occurred'}
-                          </div>
-                          {response.response.error?.retryable && (
-                            <div className="text-xs mt-2 opacity-75">
-                              This error is retryable. Try sending the prompt again.
-                            </div>
-                          )}
+                        <div className="text-destructive" style={{ fontSize: `${fontSize}px` }}>
+                          <div className="font-medium">Error</div>
+                          <div>{response.response.error?.message || 'Unknown error occurred'}</div>
                         </div>
                       ) : response.response.content ? (
-                        <div className="whitespace-pre-wrap text-sm">
+                        <div className="whitespace-pre-wrap" style={{ fontSize: `${fontSize}px` }}>
                           {response.response.content}
                           {isStreaming && (
-                            <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
+                            <span className="inline-block w-1 h-2 bg-primary animate-pulse ml-1" />
                           )}
                         </div>
                       ) : (
-                        <div className="text-muted-foreground text-sm italic">
-                          {isStreaming ? 'Waiting for response...' : 'No response yet'}
+                        <div className="text-muted-foreground italic" style={{ fontSize: `${fontSize}px` }}>
+                          {isStreaming ? 'Waiting...' : 'No response'}
                         </div>
                       )}
                     </div>
@@ -205,49 +271,27 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
 
                 {/* Loading State */}
                 {isLoading && !response && (
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium">
-                      Response
-                    </label>
-                    <div className="p-3 border rounded-lg bg-muted/30 min-h-32 flex items-center justify-center">
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-sm">Preparing request...</span>
-                      </div>
+                  <div
+                    className="p-1 border rounded bg-muted/30 flex items-center justify-center"
+                    style={{ height: '2rem' }}
+                  >
+                    <div className="flex items-center space-x-1 text-muted-foreground">
+                      <div className="w-1 h-1 border border-primary border-t-transparent rounded-full animate-spin"></div>
+                      <span style={{ fontSize: `${fontSize}px` }}>•••</span>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      {/* Empty State */}
-      {prompts.length === 0 && (
-        <div className="text-center py-16">
-          <div className="text-muted-foreground mb-4">
-            <div className="text-4xl mb-2">📝</div>
-            <h3 className="text-lg font-medium mb-2">No prompts yet</h3>
-            <p className="text-sm">Add your first prompt to start comparing responses</p>
-          </div>
-          <button
-            onClick={() => onPromptAdd()}
-            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            Add Your First Prompt
-          </button>
-        </div>
-      )}
-
       {/* Grid Statistics */}
       {prompts.length > 0 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground pt-4 border-t">
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
           <div>
-            {prompts.length} prompt{prompts.length !== 1 ? 's' : ''} • {responses.length} response{responses.length !== 1 ? 's' : ''}
-          </div>
-          <div>
-            Grid: {gridColumns} column{gridColumns !== 1 ? 's' : ''}
+            {prompts.length} prompts • {responses.length} responses
           </div>
         </div>
       )}

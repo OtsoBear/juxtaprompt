@@ -2,9 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  base: '/juxtaprompt/',
+  base: command === 'build' ? '/juxtaprompt/' : '/',
+  publicDir: 'public',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -39,6 +40,10 @@ export default defineConfig({
     open: true,
     // Enable CORS for development
     cors: true,
+    // Configure static file serving
+    fs: {
+      strict: false,
+    },
   },
   // Optimize dependencies
   optimizeDeps: {
@@ -49,4 +54,4 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
-});
+}));

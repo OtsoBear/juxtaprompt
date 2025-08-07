@@ -1,11 +1,30 @@
 // src/components/settings/LLMConfigurationPanel.tsx
-import React, { useState, useEffect } from 'react';
-import { Settings, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import type { LLMConfig, LLMProvider } from '@/types/llm';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Settings, Eye, EyeOff, AlertCircle, CheckCircle, Loader2, RefreshCw, Save } from 'lucide-react';
+import type { LLMConfig, LLMProvider, ModelInfo, AvailableModelsResult } from '@/types/llm';
 import { DEFAULT_PROVIDER_CONFIGS, PROVIDER_MODELS } from '@/types/llm';
 import { StorageSecuritySelector } from './StorageSecuritySelector';
 import { storageService } from '@/services/storage';
 import { llmProviderManager } from '@/services/llm';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Separator } from '@/components/ui/separator';
+
+// Simple debounce utility
+const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): ((...args: Parameters<T>) => void) => {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
 
 interface LLMConfigurationPanelProps {
   config: LLMConfig | null;
@@ -25,6 +44,23 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
   const [validationStatus, setValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [storagePreference, setStoragePreference] = useState(storageService.getStoragePreference());
+  
+  // Model loading states
+  const [availableModels, setAvailableModels] = useState<Record<LLMProvider, ModelInfo[]>>({
+    openai: [],
+    anthropic: [],
+    gemini: [],
+  });
+  const [modelsLoading, setModelsLoading] = useState<Record<LLMProvider, boolean>>({
+    openai: false,
+    anthropic: false,
+    gemini: false,
+  });
+  const [modelsError, setModelsError] = useState<Record<LLMProvider, string | null>>({
+    openai: null,
+    anthropic: null,
+    gemini: null,
+  });
 
   // Form state
   const [formData, setFormData] = useState<Partial<LLMConfig>>(() => {
@@ -56,6 +92,19 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
     return () => window.removeEventListener('storage-preference-changed', handleStorageChange);
   }, []);
 
+  // Auto-load models for providers with saved API keys on component mount
+  useEffect(() => {
+    const providers: LLMProvider[] = ['openai', 'anthropic', 'gemini'];
+    
+    providers.forEach(provider => {
+      const apiKey = storageService.getAPIKey(provider);
+      if (apiKey) {
+        const defaultConfig = DEFAULT_PROVIDER_CONFIGS[provider];
+        loadModelsForProvider(provider, apiKey, defaultConfig.baseUrl);
+      }
+    });
+  }, []); // Empty dependency array means this runs once on mount
+
   // Validate configuration
   const validateConfig = async (configToValidate: Partial<LLMConfig>) => {
     if (!configToValidate.provider || !configToValidate.apiKey) {
@@ -66,9 +115,24 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
     setValidationError(null);
 
     try {
+      // Create a complete config object with defaults
+      const defaultConfig = DEFAULT_PROVIDER_CONFIGS[configToValidate.provider];
+      const completeConfig: LLMConfig = {
+        provider: configToValidate.provider,
+        apiKey: configToValidate.apiKey,
+        baseUrl: configToValidate.baseUrl || defaultConfig.baseUrl,
+        model: configToValidate.model || defaultConfig.model,
+        temperature: configToValidate.temperature ?? defaultConfig.temperature,
+        maxTokens: configToValidate.maxTokens ?? defaultConfig.maxTokens,
+        topP: configToValidate.topP ?? defaultConfig.topP,
+        frequencyPenalty: configToValidate.frequencyPenalty ?? defaultConfig.frequencyPenalty,
+        presencePenalty: configToValidate.presencePenalty ?? defaultConfig.presencePenalty,
+        systemMessage: configToValidate.systemMessage || defaultConfig.systemMessage,
+      };
+
       const validation = llmProviderManager.validateConfig(
         configToValidate.provider,
-        configToValidate as LLMConfig
+        completeConfig
       );
 
       if (validation.success) {
@@ -99,6 +163,42 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
     if (field === 'apiKey' && typeof value === 'string' && value.length > 10) {
       setTimeout(() => validateConfig(newFormData), 500);
     }
+
+    // Auto-save for non-API key fields (API key is handled separately)
+    if (field !== 'apiKey' && newFormData.provider && newFormData.apiKey) {
+      autoSaveConfig(newFormData);
+    }
+  };
+
+  // Load models for a provider
+  const loadModelsForProvider = async (provider: LLMProvider, apiKey: string, baseUrl?: string) => {
+    if (!apiKey) return;
+
+    setModelsLoading(prev => ({ ...prev, [provider]: true }));
+    setModelsError(prev => ({ ...prev, [provider]: null }));
+
+    try {
+      const result: AvailableModelsResult = await llmProviderManager.getAvailableModels(
+        provider,
+        apiKey,
+        baseUrl
+      );
+      
+      setAvailableModels(prev => ({ ...prev, [provider]: result.models }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load models';
+      setModelsError(prev => ({ ...prev, [provider]: errorMessage }));
+      
+      // Fallback to static models
+      const staticModels = PROVIDER_MODELS[provider].map(modelId => ({
+        id: modelId,
+        name: modelId,
+        description: `${provider} model`,
+      }));
+      setAvailableModels(prev => ({ ...prev, [provider]: staticModels }));
+    } finally {
+      setModelsLoading(prev => ({ ...prev, [provider]: false }));
+    }
   };
 
   // Handle provider change
@@ -114,30 +214,73 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
     setFormData(newFormData);
     setValidationStatus('idle');
     setValidationError(null);
-  };
 
-  // Save configuration
-  const handleSave = () => {
-    if (!formData.provider || !formData.apiKey) {
-      setValidationError('Provider and API key are required');
-      return;
+    // Auto-save if we have an API key
+    if (existingApiKey) {
+      autoSaveConfig(newFormData);
+      loadModelsForProvider(provider, existingApiKey, defaultConfig.baseUrl);
     }
-
-    const fullConfig: LLMConfig = {
-      provider: formData.provider,
-      apiKey: formData.apiKey,
-      baseUrl: formData.baseUrl || DEFAULT_PROVIDER_CONFIGS[formData.provider].baseUrl,
-      model: formData.model || DEFAULT_PROVIDER_CONFIGS[formData.provider].model,
-      temperature: formData.temperature ?? DEFAULT_PROVIDER_CONFIGS[formData.provider].temperature,
-      maxTokens: formData.maxTokens ?? DEFAULT_PROVIDER_CONFIGS[formData.provider].maxTokens,
-      topP: formData.topP ?? DEFAULT_PROVIDER_CONFIGS[formData.provider].topP,
-      frequencyPenalty: formData.frequencyPenalty ?? DEFAULT_PROVIDER_CONFIGS[formData.provider].frequencyPenalty,
-      presencePenalty: formData.presencePenalty ?? DEFAULT_PROVIDER_CONFIGS[formData.provider].presencePenalty,
-      systemMessage: formData.systemMessage || DEFAULT_PROVIDER_CONFIGS[formData.provider].systemMessage,
-    };
-
-    onConfigChange(fullConfig);
   };
+
+  // Auto-save configuration with debouncing
+  const autoSaveConfig = useCallback(
+    debounce((configToSave: Partial<LLMConfig>) => {
+      if (!configToSave.provider || !configToSave.apiKey) {
+        return;
+      }
+
+      try {
+        // Save the API key to storage
+        storageService.saveAPIKey(configToSave.provider, configToSave.apiKey);
+
+        const fullConfig: LLMConfig = {
+          provider: configToSave.provider,
+          apiKey: configToSave.apiKey,
+          baseUrl: configToSave.baseUrl || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].baseUrl,
+          model: configToSave.model || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].model,
+          temperature: configToSave.temperature ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].temperature,
+          maxTokens: configToSave.maxTokens ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].maxTokens,
+          topP: configToSave.topP ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].topP,
+          frequencyPenalty: configToSave.frequencyPenalty ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].frequencyPenalty,
+          presencePenalty: configToSave.presencePenalty ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].presencePenalty,
+          systemMessage: configToSave.systemMessage || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].systemMessage,
+        };
+
+        // Validate before saving
+        const validation = llmProviderManager.validateConfig(configToSave.provider, fullConfig);
+        if (validation.success) {
+          onConfigChange(validation.data);
+        }
+      } catch (error) {
+        console.warn('Auto-save failed:', error);
+      }
+    }, 1000),
+    [onConfigChange]
+  );
+
+  // Handle API key change
+  const handleApiKeyChange = (apiKey: string) => {
+    handleFieldChange('apiKey', apiKey);
+    
+    // Auto-save when API key changes
+    if (formData.provider && apiKey.length > 10) {
+      const configToSave = { ...formData, apiKey };
+      autoSaveConfig(configToSave);
+      
+      // Load models when API key is entered
+      setTimeout(() => {
+        loadModelsForProvider(formData.provider!, apiKey, formData.baseUrl);
+      }, 500);
+    }
+  };
+
+  // Refresh models for current provider
+  const refreshModels = () => {
+    if (formData.provider && formData.apiKey) {
+      loadModelsForProvider(formData.provider, formData.apiKey, formData.baseUrl);
+    }
+  };
+
 
   // Handle storage preference change
   const handleStoragePreferenceChange = (preference: typeof storagePreference) => {
@@ -188,78 +331,162 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
           <label className="block text-sm font-medium">Provider</label>
           <div className="grid grid-cols-3 gap-2">
             {Object.keys(DEFAULT_PROVIDER_CONFIGS).map((provider) => (
-              <button
+              <Button
                 key={provider}
                 onClick={() => handleProviderChange(provider as LLMProvider)}
-                className={`p-3 border rounded-lg text-center transition-colors ${
-                  formData.provider === provider
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border hover:border-muted-foreground'
-                }`}
+                variant={formData.provider === provider ? 'default' : 'outline'}
+                className="h-auto p-3 flex-col"
               >
                 <div className="font-medium capitalize">{provider}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {PROVIDER_MODELS[provider as LLMProvider].length} models
+                <div className="text-xs opacity-70 mt-1">
+                  {availableModels[provider as LLMProvider].length > 0
+                    ? `${availableModels[provider as LLMProvider].length} models`
+                    : `${PROVIDER_MODELS[provider as LLMProvider].length} models`
+                  }
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         {/* API Key */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium">API Key</label>
+          <Label>API Key</Label>
           <div className="relative">
-            <input
-              type={showApiKey ? 'text' : 'password'}
-              value={formData.apiKey || ''}
-              onChange={(e) => handleFieldChange('apiKey', e.target.value)}
-              placeholder={`Enter your ${formData.provider} API key`}
-              className="w-full p-3 pr-20 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
+            <form autoComplete="on">
+              <input
+                type="text"
+                name="username"
+                value={`${formData.provider} api key`}
+                autoComplete="username"
+                style={{ display: 'none' }}
+                readOnly
+                aria-hidden="true"
+                tabIndex={-1}
+                title={`${formData.provider} API key username`}
+              />
+              <Input
+                type={showApiKey ? 'text' : 'password'}
+                name="password"
+                value={formData.apiKey || ''}
+                onChange={(e) => handleApiKeyChange(e.target.value)}
+                placeholder={`Enter your ${formData.provider} API key`}
+                className="pr-20"
+                autoComplete="current-password"
+              />
+            </form>
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
               {getValidationIcon()}
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="p-1 hover:bg-muted rounded transition-colors"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
               >
                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+              </Button>
             </div>
           </div>
           {validationError && (
-            <p className="text-sm text-red-600">{validationError}</p>
+            <p className="text-sm text-destructive">{validationError}</p>
           )}
         </div>
 
         {/* Model Selection */}
         {formData.provider && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium">Model</label>
-            <select
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <Label>Model</Label>
+                <span className="text-xs text-muted-foreground">
+                  Prices shown as (input cost / output cost) per 1M tokens
+                </span>
+              </div>
+              {formData.apiKey && (
+                <Button
+                  type="button"
+                  onClick={refreshModels}
+                  disabled={modelsLoading[formData.provider]}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                >
+                  <RefreshCw className={`h-3 w-3 ${modelsLoading[formData.provider] ? 'animate-spin' : ''}`} />
+                  <span className="ml-1 text-xs">Refresh</span>
+                </Button>
+              )}
+            </div>
+            
+            <Select
               value={formData.model || ''}
-              onChange={(e) => handleFieldChange('model', e.target.value)}
-              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              onValueChange={(value) => handleFieldChange('model', value)}
+              disabled={modelsLoading[formData.provider]}
             >
-              {PROVIDER_MODELS[formData.provider].map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue placeholder={
+                  modelsLoading[formData.provider]
+                    ? "Loading models..."
+                    : availableModels[formData.provider].length > 0
+                      ? "Select a model"
+                      : "Enter API key to load models"
+                } />
+              </SelectTrigger>
+              <SelectContent>
+                {availableModels[formData.provider].length > 0 ? (
+                  availableModels[formData.provider].map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col py-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{model.name}</span>
+                          {model.pricing && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ${model.pricing.input}/${model.pricing.output}
+                            </span>
+                          )}
+                        </div>
+                        {model.description && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {model.description}
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))
+                ) : (
+                  PROVIDER_MODELS[formData.provider].map((model) => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            
+            {modelsError[formData.provider] && (
+              <p className="text-sm text-destructive flex items-center">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                {modelsError[formData.provider]}
+              </p>
+            )}
+            
+            {modelsLoading[formData.provider] && (
+              <p className="text-sm text-muted-foreground flex items-center">
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Loading available models...
+              </p>
+            )}
           </div>
         )}
 
         {/* Base URL */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium">Base URL</label>
-          <input
+          <Label>Base URL</Label>
+          <Input
             type="url"
             value={formData.baseUrl || ''}
             onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
             placeholder="API base URL"
-            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
       </div>
@@ -271,16 +498,15 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Temperature */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium">
+            <Label>
               Temperature ({formData.temperature ?? 0.7})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={formData.temperature ?? 0.7}
-              onChange={(e) => handleFieldChange('temperature', parseFloat(e.target.value))}
+            </Label>
+            <Slider
+              value={[formData.temperature ?? 0.7]}
+              onValueChange={(value) => handleFieldChange('temperature', value[0])}
+              max={2}
+              min={0}
+              step={0.1}
               className="w-full"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -291,45 +517,42 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
 
           {/* Max Tokens */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium">Max Tokens</label>
-            <input
+            <Label>Max Tokens</Label>
+            <Input
               type="number"
               min="1"
               max="32000"
               value={formData.maxTokens ?? 2048}
               onChange={(e) => handleFieldChange('maxTokens', parseInt(e.target.value))}
-              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
 
           {/* Top P */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium">
+            <Label>
               Top P ({formData.topP ?? 1.0})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={formData.topP ?? 1.0}
-              onChange={(e) => handleFieldChange('topP', parseFloat(e.target.value))}
+            </Label>
+            <Slider
+              value={[formData.topP ?? 1.0]}
+              onValueChange={(value) => handleFieldChange('topP', value[0])}
+              max={1}
+              min={0}
+              step={0.1}
               className="w-full"
             />
           </div>
 
           {/* Frequency Penalty */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium">
+            <Label>
               Frequency Penalty ({formData.frequencyPenalty ?? 0.0})
-            </label>
-            <input
-              type="range"
-              min="-2"
-              max="2"
-              step="0.1"
-              value={formData.frequencyPenalty ?? 0.0}
-              onChange={(e) => handleFieldChange('frequencyPenalty', parseFloat(e.target.value))}
+            </Label>
+            <Slider
+              value={[formData.frequencyPenalty ?? 0.0]}
+              onValueChange={(value) => handleFieldChange('frequencyPenalty', value[0])}
+              max={2}
+              min={-2}
+              step={0.1}
               className="w-full"
             />
           </div>
@@ -337,41 +560,41 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
 
         {/* System Message */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium">System Message</label>
-          <textarea
+          <Label>System Message</Label>
+          <Textarea
             value={formData.systemMessage || ''}
             onChange={(e) => handleFieldChange('systemMessage', e.target.value)}
             placeholder="Optional system message to set context for the AI"
             rows={3}
-            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+            className="resize-none"
           />
         </div>
       </div>
 
+      <Separator />
+      
       {/* Actions */}
-      <div className="flex items-center justify-between pt-6 border-t">
+      <div className="flex items-center justify-between pt-6">
         <div className="text-sm text-muted-foreground">
-          {validationStatus === 'valid' && 'Configuration is valid'}
-          {validationStatus === 'invalid' && 'Please fix configuration errors'}
-          {validationStatus === 'validating' && 'Validating configuration...'}
+          {validationStatus === 'valid' && '✅ Configuration is valid and auto-saved'}
+          {validationStatus === 'invalid' && '❌ Please fix configuration errors'}
+          {validationStatus === 'validating' && '⏳ Validating configuration...'}
+          {validationStatus === 'idle' && formData.apiKey && (
+            <span className="flex items-center">
+              <Save className="h-4 w-4 mr-1" />
+              Settings auto-save as you type
+            </span>
+          )}
         </div>
 
         <div className="flex space-x-3">
-          <button
+          <Button
             onClick={() => validateConfig(formData)}
             disabled={!formData.provider || !formData.apiKey || validationStatus === 'validating'}
-            className="px-4 py-2 border border-border rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            variant="outline"
           >
             Validate
-          </button>
-          
-          <button
-            onClick={handleSave}
-            disabled={!formData.provider || !formData.apiKey || (!storagePreference.acknowledgedRisks && storagePreference.type !== 'none')}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Save Configuration
-          </button>
+          </Button>
         </div>
       </div>
     </div>

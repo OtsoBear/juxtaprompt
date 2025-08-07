@@ -77,7 +77,7 @@ export interface PromptGridProps extends BaseComponentProps {
   readonly responses: ReadonlyArray<ResponseItem>;
   readonly onPromptChange: (id: string, content: string) => void;
   readonly onPromptRemove: (id: string) => void;
-  readonly onPromptAdd: () => void;
+  readonly onPromptAdd: (content?: string, title?: string) => void;
   readonly isLoading: boolean;
 }
 

@@ -3,6 +3,9 @@ import React, { useState, useMemo } from 'react';
 import { BarChart3, Clock, Zap, FileText } from 'lucide-react';
 import type { ResponseItem } from '@/types/app';
 import { StreamingResponse } from './StreamingResponse';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface ResponseComparisonProps {
   responses: ResponseItem[];
@@ -101,18 +104,16 @@ export const ResponseComparison: React.FC<ResponseComparisonProps> = ({
               { key: 'time', label: 'Time', icon: Clock },
               { key: 'length', label: 'Length', icon: FileText },
             ].map(({ key, label, icon: Icon }) => (
-              <button
+              <Button
                 key={key}
                 onClick={() => setSelectedMetric(key as typeof selectedMetric)}
-                className={`flex items-center space-x-1 px-3 py-1 text-xs rounded transition-colors ${
-                  selectedMetric === key
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted hover:bg-muted/80'
-                }`}
+                variant={selectedMetric === key ? 'default' : 'outline'}
+                size="sm"
+                className="text-xs"
               >
-                <Icon className="h-3 w-3" />
-                <span>{label}</span>
-              </button>
+                <Icon className="h-3 w-3 mr-1" />
+                {label}
+              </Button>
             ))}
           </div>
         </div>
@@ -120,56 +121,56 @@ export const ResponseComparison: React.FC<ResponseComparisonProps> = ({
 
       {/* Metrics Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 border rounded-lg">
-          <div className="flex items-center space-x-2 mb-2">
-            <Zap className="h-4 w-4 text-blue-500" />
-            <span className="text-sm font-medium">Token Efficiency</span>
-          </div>
-          <div className="space-y-1">
+        <Card>
+          <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+            <Zap className="h-4 w-4 text-blue-500 mr-2" />
+            <CardTitle className="text-sm font-medium">Token Efficiency</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
             {metrics.map(metric => (
               <div key={metric.id} className="flex justify-between text-xs">
                 <span className="text-muted-foreground">{metric.model}</span>
-                <span className={getMetricColor(metric.tokenCount, 'tokenCount')}>
+                <Badge variant="outline" className={`text-xs ${getMetricColor(metric.tokenCount, 'tokenCount')}`}>
                   {metric.tokenCount} tokens
-                </span>
+                </Badge>
               </div>
             ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="p-4 border rounded-lg">
-          <div className="flex items-center space-x-2 mb-2">
-            <Clock className="h-4 w-4 text-green-500" />
-            <span className="text-sm font-medium">Response Time</span>
-          </div>
-          <div className="space-y-1">
+        <Card>
+          <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+            <Clock className="h-4 w-4 text-green-500 mr-2" />
+            <CardTitle className="text-sm font-medium">Response Time</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
             {metrics.map(metric => (
               <div key={metric.id} className="flex justify-between text-xs">
                 <span className="text-muted-foreground">{metric.model}</span>
-                <span className={getMetricColor(metric.duration, 'duration')}>
+                <Badge variant="outline" className={`text-xs ${getMetricColor(metric.duration, 'duration')}`}>
                   {metric.duration > 0 ? `${metric.duration}ms` : 'N/A'}
-                </span>
+                </Badge>
               </div>
             ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="p-4 border rounded-lg">
-          <div className="flex items-center space-x-2 mb-2">
-            <FileText className="h-4 w-4 text-purple-500" />
-            <span className="text-sm font-medium">Content Length</span>
-          </div>
-          <div className="space-y-1">
+        <Card>
+          <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+            <FileText className="h-4 w-4 text-purple-500 mr-2" />
+            <CardTitle className="text-sm font-medium">Content Length</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
             {metrics.map(metric => (
               <div key={metric.id} className="flex justify-between text-xs">
                 <span className="text-muted-foreground">{metric.model}</span>
-                <span className={getMetricColor(metric.length, 'length')}>
+                <Badge variant="outline" className={`text-xs ${getMetricColor(metric.length, 'length')}`}>
                   {metric.length} chars
-                </span>
+                </Badge>
               </div>
             ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Response Grid */}
@@ -195,40 +196,44 @@ export const ResponseComparison: React.FC<ResponseComparisonProps> = ({
 
       {/* Summary Statistics */}
       {metrics.length > 1 && (
-        <div className="p-4 bg-muted/30 rounded-lg">
-          <h3 className="font-medium mb-3">Summary</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Fastest Response:</span>
-              <div className="font-medium">
-                {(() => {
-                  const fastest = getBestPerformer('duration');
-                  return fastest ? `${fastest.model} (${fastest.duration}ms)` : 'N/A';
-                })()}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Fastest Response:</span>
+                <div className="font-medium">
+                  {(() => {
+                    const fastest = getBestPerformer('duration');
+                    return fastest ? `${fastest.model} (${fastest.duration}ms)` : 'N/A';
+                  })()}
+                </div>
+              </div>
+              
+              <div>
+                <span className="text-muted-foreground">Most Efficient:</span>
+                <div className="font-medium">
+                  {(() => {
+                    const efficient = getBestPerformer('tokenCount');
+                    return efficient ? `${efficient.model} (${efficient.tokenCount} tokens)` : 'N/A';
+                  })()}
+                </div>
+              </div>
+              
+              <div>
+                <span className="text-muted-foreground">Longest Response:</span>
+                <div className="font-medium">
+                  {(() => {
+                    const longest = getBestPerformer('length');
+                    return longest ? `${longest.model} (${longest.length} chars)` : 'N/A';
+                  })()}
+                </div>
               </div>
             </div>
-            
-            <div>
-              <span className="text-muted-foreground">Most Efficient:</span>
-              <div className="font-medium">
-                {(() => {
-                  const efficient = getBestPerformer('tokenCount');
-                  return efficient ? `${efficient.model} (${efficient.tokenCount} tokens)` : 'N/A';
-                })()}
-              </div>
-            </div>
-            
-            <div>
-              <span className="text-muted-foreground">Longest Response:</span>
-              <div className="font-medium">
-                {(() => {
-                  const longest = getBestPerformer('length');
-                  return longest ? `${longest.model} (${longest.length} chars)` : 'N/A';
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

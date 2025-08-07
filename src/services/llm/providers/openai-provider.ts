@@ -1,6 +1,6 @@
 // src/services/llm/providers/openai-provider.ts
 import { BaseLLMProvider, LLMProviderError } from '../base-llm-provider';
-import type { LLMRequest, LLMStreamChunk, ValidationResult } from '@/types/llm';
+import type { LLMRequest, LLMStreamChunk, ValidationResult, ModelInfo } from '@/types/llm';
 import { validateOpenAIResponse, type OpenAIStreamChunk } from '@/schemas/llm-schemas';
 
 /**
@@ -228,6 +228,165 @@ export class OpenAIProvider extends BaseLLMProvider {
       response.status,
       details
     );
+  }
+
+  /**
+   * Fetch available models from OpenAI API
+   */
+  protected async fetchAvailableModels(apiKey: string, baseUrl?: string): Promise<ModelInfo[]> {
+    const url = `${baseUrl || 'https://api.openai.com/v1'}/models`;
+    const headers = this.createHeaders(apiKey);
+
+    try {
+      const response = await this.makeRequest(url, {
+        method: 'GET',
+        headers,
+      });
+
+      const data = await response.json();
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        throw new Error('Invalid response format from OpenAI models API');
+      }
+
+      // Filter and map OpenAI models to our ModelInfo format
+      const models: ModelInfo[] = data.data
+        .filter((model: any) => {
+          // Only include chat completion models
+          return model.id && (
+            model.id.startsWith('gpt-') ||
+            model.id.includes('chat') ||
+            model.id.includes('turbo')
+          );
+        })
+        .map((model: any) => ({
+          id: model.id,
+          name: model.id,
+          description: this.getModelDescription(model.id),
+          contextLength: this.getModelContextLength(model.id),
+          maxOutputTokens: this.getModelMaxOutputTokens(model.id),
+          pricing: this.getModelPricing(model.id),
+        }))
+        .sort((a: ModelInfo, b: ModelInfo) => {
+          // Sort by preference: gpt-4o models first, then gpt-4, then gpt-3.5
+          const getModelPriority = (id: string) => {
+            if (id.includes('gpt-4o')) return 1;
+            if (id.includes('gpt-4')) return 2;
+            if (id.includes('gpt-3.5')) return 3;
+            return 4;
+          };
+          return getModelPriority(a.id) - getModelPriority(b.id);
+        });
+
+      return models;
+    } catch (error) {
+      console.error('Failed to fetch OpenAI models:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get fallback models when API call fails
+   */
+  protected getFallbackModels(): ModelInfo[] {
+    return [
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        description: 'Most advanced multimodal model',
+        contextLength: 128000,
+        maxOutputTokens: 4096,
+        pricing: { input: 5.0, output: 15.0 },
+      },
+      {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o Mini',
+        description: 'Affordable and intelligent small model',
+        contextLength: 128000,
+        maxOutputTokens: 16384,
+        pricing: { input: 0.15, output: 0.6 },
+      },
+      {
+        id: 'gpt-4-turbo',
+        name: 'GPT-4 Turbo',
+        description: 'Previous generation flagship model',
+        contextLength: 128000,
+        maxOutputTokens: 4096,
+        pricing: { input: 10.0, output: 30.0 },
+      },
+      {
+        id: 'gpt-4',
+        name: 'GPT-4',
+        description: 'Original GPT-4 model',
+        contextLength: 8192,
+        maxOutputTokens: 4096,
+        pricing: { input: 30.0, output: 60.0 },
+      },
+      {
+        id: 'gpt-3.5-turbo',
+        name: 'GPT-3.5 Turbo',
+        description: 'Fast and affordable model',
+        contextLength: 16385,
+        maxOutputTokens: 4096,
+        pricing: { input: 0.5, output: 1.5 },
+      },
+    ];
+  }
+
+  /**
+   * Get model description
+   */
+  private getModelDescription(modelId: string): string {
+    const descriptions: Record<string, string> = {
+      'gpt-4o': 'Most advanced multimodal model',
+      'gpt-4o-mini': 'Affordable and intelligent small model',
+      'gpt-4-turbo': 'Previous generation flagship model',
+      'gpt-4': 'Original GPT-4 model',
+      'gpt-3.5-turbo': 'Fast and affordable model',
+    };
+    return descriptions[modelId] || 'OpenAI language model';
+  }
+
+  /**
+   * Get model context length
+   */
+  private getModelContextLength(modelId: string): number {
+    const contextLengths: Record<string, number> = {
+      'gpt-4o': 128000,
+      'gpt-4o-mini': 128000,
+      'gpt-4-turbo': 128000,
+      'gpt-4': 8192,
+      'gpt-3.5-turbo': 16385,
+    };
+    return contextLengths[modelId] || 4096;
+  }
+
+  /**
+   * Get model max output tokens
+   */
+  private getModelMaxOutputTokens(modelId: string): number {
+    const maxOutputTokens: Record<string, number> = {
+      'gpt-4o': 4096,
+      'gpt-4o-mini': 16384,
+      'gpt-4-turbo': 4096,
+      'gpt-4': 4096,
+      'gpt-3.5-turbo': 4096,
+    };
+    return maxOutputTokens[modelId] || 4096;
+  }
+
+  /**
+   * Get model pricing (per 1M tokens)
+   */
+  private getModelPricing(modelId: string): { input: number; output: number } {
+    const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-4o': { input: 5.0, output: 15.0 },
+      'gpt-4o-mini': { input: 0.15, output: 0.6 },
+      'gpt-4-turbo': { input: 10.0, output: 30.0 },
+      'gpt-4': { input: 30.0, output: 60.0 },
+      'gpt-3.5-turbo': { input: 0.5, output: 1.5 },
+    };
+    return pricing[modelId] || { input: 1.0, output: 2.0 };
   }
 
   /**

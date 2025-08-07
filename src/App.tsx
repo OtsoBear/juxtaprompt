@@ -1,5 +1,6 @@
 // src/App.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Settings } from 'lucide-react';
 import type {
   AppState,
   PromptItem,
@@ -13,6 +14,13 @@ import { urlStateManager } from '@/services/url-state';
 import { llmProviderManager } from '@/services/llm';
 import { openaiProvider, anthropicProvider, geminiProvider } from '@/services/llm/providers';
 import { PromptGrid } from '@/components/layout';
+import { LLMConfigurationPanel } from '@/components/settings';
+import { SimpleThemeToggle } from '@/components/ui';
+import { useTheme } from '@/hooks/useTheme';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /**
  * Main application component with comprehensive state management
@@ -51,6 +59,17 @@ const App: React.FC = () => {
     };
   });
 
+  // Settings panel state
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Theme management
+  const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme(
+    state.ui.theme,
+    (newTheme) => {
+      updateUIState({ theme: newTheme });
+    }
+  );
+
   // Register LLM providers on mount
   useEffect(() => {
     llmProviderManager.registerProvider(openaiProvider);
@@ -78,8 +97,16 @@ const App: React.FC = () => {
             apiKey,
           };
           
-          setState(prev => ({ ...prev, config }));
-          break; // Use the first available provider
+          // Validate the configuration before setting it
+          const validation = llmProviderManager.validateConfig(provider, config);
+          if (validation.success) {
+            setState(prev => ({ ...prev, config: validation.data }));
+            break; // Use the first available provider
+          } else {
+            console.warn(`Invalid configuration for ${provider}:`, validation.error.message);
+            // Clear the invalid API key
+            storageService.clearAPIKey(provider);
+          }
         }
       }
     };
@@ -326,12 +353,32 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="container mx-auto px-4 py-8">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-center mb-2">
-            Juxtaprompt
-          </h1>
-          <p className="text-muted-foreground text-center">
+      <div className="w-full px-2 py-2">
+        <header className="mb-2">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-4xl font-bold">
+                Juxtaprompt
+              </h1>
+            </div>
+            <div className="flex items-center space-x-2">
+              <SimpleThemeToggle
+                theme={theme}
+                resolvedTheme={resolvedTheme}
+                onToggle={toggleTheme}
+              />
+              <Button
+                onClick={() => setShowSettings(true)}
+                variant="ghost"
+                size="icon"
+                title="Open settings"
+                aria-label="Open settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <p className="text-muted-foreground text-center text-sm">
             Professional prompt comparison tool with real-time streaming responses
           </p>
         </header>
@@ -339,39 +386,37 @@ const App: React.FC = () => {
         <main>
           {/* Configuration Notice */}
           {!contextValue.config && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-start space-x-3">
-                <div className="text-yellow-600">⚠️</div>
-                <div>
-                  <h3 className="font-medium text-yellow-800 mb-1">
-                    Configuration Required
-                  </h3>
-                  <p className="text-sm text-yellow-700">
-                    Please configure an LLM provider to start comparing prompts.
-                    Add your API key in the settings panel.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <Alert className="mb-6">
+              <div className="text-yellow-600">⚠️</div>
+              <AlertDescription>
+                <h3 className="font-medium mb-1">
+                  Configuration Required
+                </h3>
+                <p className="text-sm">
+                  Please configure an LLM provider to start comparing prompts.
+                  Add your API key in the settings panel.
+                </p>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Error Display */}
           {contextValue.error && (
-            <div className="mb-6 p-4 bg-destructive/10 border border-destructive rounded-lg">
-              <div className="flex items-start space-x-3">
-                <div className="text-destructive">❌</div>
-                <div>
-                  <h3 className="font-medium text-destructive mb-1">Error</h3>
-                  <p className="text-sm">{contextValue.error}</p>
-                  <button
-                    onClick={() => setError(null)}
-                    className="mt-2 text-xs text-destructive hover:underline"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
+            <Alert variant="destructive" className="mb-6">
+              <div className="text-destructive">❌</div>
+              <AlertDescription>
+                <h3 className="font-medium mb-1">Error</h3>
+                <p className="text-sm">{contextValue.error}</p>
+                <Button
+                  onClick={() => setError(null)}
+                  variant="link"
+                  size="sm"
+                  className="mt-2 h-auto p-0 text-xs text-destructive hover:underline"
+                >
+                  Dismiss
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Main Content */}
@@ -384,31 +429,31 @@ const App: React.FC = () => {
                   {contextValue.responses.length} response{contextValue.responses.length !== 1 ? 's' : ''}
                 </div>
                 {contextValue.config && (
-                  <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                  <Badge variant="secondary" className="text-xs">
                     {contextValue.config.provider} • {contextValue.config.model}
-                  </div>
+                  </Badge>
                 )}
               </div>
 
               <div className="flex items-center space-x-2">
                 {contextValue.prompts.some(p => p.content.trim()) && contextValue.config && (
-                  <button
+                  <Button
                     onClick={sendPrompts}
                     disabled={contextValue.isLoading}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="bg-green-600 hover:bg-green-700"
                   >
                     {contextValue.isLoading ? 'Sending...' : 'Send All Prompts'}
-                  </button>
+                  </Button>
                 )}
                 
                 {contextValue.responses.length > 0 && (
-                  <button
+                  <Button
                     onClick={clearResponses}
                     disabled={contextValue.isLoading}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    variant="secondary"
                   >
                     Clear Responses
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -424,6 +469,40 @@ const App: React.FC = () => {
             />
           </div>
         </main>
+
+        {/* Settings Modal */}
+        <Dialog open={showSettings} onOpenChange={setShowSettings}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Settings</DialogTitle>
+              <DialogDescription>
+                Configure your application preferences including theme and LLM settings.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-4">Theme</h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Choose your preferred theme
+                  </span>
+                  <SimpleThemeToggle
+                    theme={theme}
+                    resolvedTheme={resolvedTheme}
+                    onToggle={toggleTheme}
+                  />
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-medium mb-4">LLM Configuration</h3>
+                <LLMConfigurationPanel
+                  config={contextValue.config}
+                  onConfigChange={setConfig}
+                />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

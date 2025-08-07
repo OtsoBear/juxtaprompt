@@ -114,11 +114,32 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, Omit<LLMConfig, 'apiK
   },
 } as const;
 
+// Model information interface
+export interface ModelInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly contextLength?: number;
+  readonly maxOutputTokens?: number;
+  readonly pricing?: {
+    input: number; // per 1M tokens
+    output: number; // per 1M tokens
+  };
+}
+
+// Available models result
+export interface AvailableModelsResult {
+  readonly models: ReadonlyArray<ModelInfo>;
+  readonly cached: boolean;
+  readonly timestamp: number;
+}
+
 // LLM Provider interface
 export interface ILLMProvider {
   readonly name: LLMProvider;
   sendStreamingRequest(request: LLMRequest): AsyncIterable<LLMStreamChunk>;
   validateConfig(config: Partial<LLMConfig>): ValidationResult<LLMConfig>;
+  getAvailableModels(apiKey: string, baseUrl?: string): Promise<AvailableModelsResult>;
 }
 
 export type ValidationResult<T> = {

@@ -1,12 +1,14 @@
 // src/services/llm/base-llm-provider.ts
-import type { 
-  ILLMProvider, 
-  LLMRequest, 
-  LLMStreamChunk, 
-  LLMConfig, 
-  LLMError, 
+import type {
+  ILLMProvider,
+  LLMRequest,
+  LLMStreamChunk,
+  LLMConfig,
+  LLMError,
   ValidationResult,
-  LLMProvider 
+  LLMProvider,
+  ModelInfo,
+  AvailableModelsResult
 } from '@/types/llm';
 import { validateLLMConfig } from '@/schemas/llm-schemas';
 
@@ -24,8 +26,12 @@ export class LLMProviderError extends Error {
     this.name = 'LLMProviderError';
     this.code = error.code;
     this.retryable = error.retryable;
-    this.statusCode = error.statusCode ?? undefined;
-    this.details = error.details ?? undefined;
+    if (error.statusCode !== undefined) {
+      this.statusCode = error.statusCode;
+    }
+    if (error.details !== undefined) {
+      this.details = error.details;
+    }
   }
 }
 
@@ -37,11 +43,83 @@ export abstract class BaseLLMProvider implements ILLMProvider {
   
   protected readonly defaultTimeout = 30000; // 30 seconds
   protected readonly maxRetries = 3;
+  
+  // Model caching
+  private modelCache: Map<string, { models: ModelInfo[]; timestamp: number }> = new Map();
+  private readonly cacheTimeout = 5 * 60 * 1000; // 5 minutes
 
   /**
    * Send streaming request to the LLM provider
    */
   public abstract sendStreamingRequest(request: LLMRequest): AsyncIterable<LLMStreamChunk>;
+
+  /**
+   * Get available models from the provider API
+   */
+  public async getAvailableModels(apiKey: string, baseUrl?: string): Promise<AvailableModelsResult> {
+    const cacheKey = `${this.name}_${apiKey.slice(-8)}_${baseUrl || 'default'}`;
+    const cached = this.modelCache.get(cacheKey);
+    
+    // Return cached result if still valid
+    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+      return {
+        models: cached.models,
+        cached: true,
+        timestamp: cached.timestamp,
+      };
+    }
+
+    try {
+      const models = await this.fetchAvailableModels(apiKey, baseUrl);
+      
+      // Cache the result
+      this.modelCache.set(cacheKey, {
+        models,
+        timestamp: Date.now(),
+      });
+
+      return {
+        models,
+        cached: false,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      // If API call fails, return cached result if available, otherwise fallback to static models
+      if (cached) {
+        console.warn(`Failed to fetch models for ${this.name}, using cached result:`, error);
+        return {
+          models: cached.models,
+          cached: true,
+          timestamp: cached.timestamp,
+        };
+      }
+      
+      // Fallback to static models
+      console.warn(`Failed to fetch models for ${this.name}, using fallback:`, error);
+      return {
+        models: this.getFallbackModels(),
+        cached: false,
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Fetch available models from the provider API (to be implemented by subclasses)
+   */
+  protected abstract fetchAvailableModels(apiKey: string, baseUrl?: string): Promise<ModelInfo[]>;
+
+  /**
+   * Get fallback models when API call fails (to be implemented by subclasses)
+   */
+  protected abstract getFallbackModels(): ModelInfo[];
+
+  /**
+   * Clear model cache
+   */
+  public clearModelCache(): void {
+    this.modelCache.clear();
+  }
 
   /**
    * Validate LLM configuration
@@ -277,7 +355,8 @@ export abstract class BaseLLMProvider implements ILLMProvider {
    * Log request for debugging (can be overridden)
    */
   protected logRequest(request: LLMRequest): void {
-    if (process.env['NODE_ENV'] === 'development') {
+    // Only log in development mode (when not in production build)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       console.log(`[${this.name}] Sending request:`, {
         id: request.id,
         prompt: request.prompt.substring(0, 100) + '...',
@@ -291,7 +370,8 @@ export abstract class BaseLLMProvider implements ILLMProvider {
    * Log response for debugging (can be overridden)
    */
   protected logResponse(chunk: LLMStreamChunk): void {
-    if (process.env['NODE_ENV'] === 'development' && chunk.isComplete) {
+    // Only log in development mode (when not in production build)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && chunk.isComplete) {
       console.log(`[${this.name}] Request completed:`, {
         requestId: chunk.requestId,
         tokenCount: chunk.tokenCount,

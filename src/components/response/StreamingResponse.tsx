@@ -2,6 +2,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Copy, Download, RefreshCw } from 'lucide-react';
 import type { LLMResponse } from '@/types/llm';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface StreamingResponseProps {
   response: LLMResponse;
@@ -86,62 +90,68 @@ export const StreamingResponse: React.FC<StreamingResponseProps> = ({
   // Error state
   if (response.error) {
     return (
-      <div className={`border rounded-lg ${className}`}>
-        <div className="p-4 bg-destructive/5 border-destructive">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-destructive rounded-full"></div>
-              <span className="text-sm font-medium text-destructive">Error</span>
+      <Card className={className}>
+        <CardContent className="p-4">
+          <Alert variant="destructive">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-destructive rounded-full"></div>
+                <span className="text-sm font-medium">Error</span>
+              </div>
+              {onRetry && response.error.retryable && (
+                <Button
+                  onClick={onRetry}
+                  variant="outline"
+                  size="sm"
+                  className="h-auto py-1 px-2 text-xs"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Retry
+                </Button>
+              )}
             </div>
-            {onRetry && response.error.retryable && (
-              <button
-                onClick={onRetry}
-                className="flex items-center space-x-1 px-2 py-1 text-xs bg-destructive/10 text-destructive rounded hover:bg-destructive/20 transition-colors"
-              >
-                <RefreshCw className="h-3 w-3" />
-                <span>Retry</span>
-              </button>
-            )}
-          </div>
-          
-          <div className="text-sm text-destructive mb-2">
-            {response.error.message}
-          </div>
-          
-          {response.error.retryable && (
-            <div className="text-xs text-destructive/70">
-              This error is retryable. You can try sending the request again.
-            </div>
-          )}
-          
-          {response.error.details !== undefined && (
-            <details className="mt-2">
-              <summary className="text-xs text-destructive/70 cursor-pointer hover:text-destructive">
-                Error Details
-              </summary>
-              <pre className="mt-1 text-xs bg-destructive/5 p-2 rounded overflow-auto">
-                {typeof response.error.details === 'string'
-                  ? response.error.details
-                  : JSON.stringify(response.error.details, null, 2)}
-              </pre>
-            </details>
-          )}
-        </div>
-      </div>
+            
+            <AlertDescription>
+              <div className="text-sm mb-2">
+                {response.error.message}
+              </div>
+              
+              {response.error.retryable && (
+                <div className="text-xs opacity-70">
+                  This error is retryable. You can try sending the request again.
+                </div>
+              )}
+              
+              {response.error.details !== undefined && (
+                <details className="mt-2">
+                  <summary className="text-xs opacity-70 cursor-pointer hover:opacity-100">
+                    Error Details
+                  </summary>
+                  <pre className="mt-1 text-xs bg-muted p-2 rounded overflow-auto">
+                    {typeof response.error.details === 'string'
+                      ? response.error.details
+                      : JSON.stringify(response.error.details, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className={`border rounded-lg overflow-hidden ${className}`}>
+    <Card className={`overflow-hidden ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-muted/30 border-b">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${
-              response.isStreaming 
-                ? 'bg-green-500 animate-pulse' 
-                : response.isComplete 
-                  ? 'bg-blue-500' 
+              response.isStreaming
+                ? 'bg-green-500 animate-pulse'
+                : response.isComplete
+                  ? 'bg-blue-500'
                   : 'bg-gray-400'
             }`}></div>
             <span className="text-sm font-medium">
@@ -154,59 +164,65 @@ export const StreamingResponse: React.FC<StreamingResponseProps> = ({
           </div>
           
           {response.metadata.tokenCount && (
-            <div className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+            <Badge variant="secondary" className="text-xs">
               {response.metadata.tokenCount} tokens
-            </div>
+            </Badge>
           )}
         </div>
 
         {showActions && response.content && (
           <div className="flex items-center space-x-1">
-            <button
+            <Button
               onClick={handleCopy}
-              className="p-1 hover:bg-muted rounded transition-colors"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
               title="Copy to clipboard"
             >
               <Copy className="h-4 w-4" />
-            </button>
+            </Button>
             
-            <button
+            <Button
               onClick={handleDownload}
-              className="p-1 hover:bg-muted rounded transition-colors"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
               title="Download as text file"
             >
               <Download className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
         )}
-      </div>
+      </CardHeader>
 
       {/* Content */}
-      <div
-        ref={contentRef}
-        onScroll={handleScroll}
-        className="p-4 max-h-96 overflow-y-auto scrollbar-thin"
-      >
-        {response.content ? (
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            {response.content}
-            {response.isStreaming && (
-              <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1 align-text-bottom" />
-            )}
-          </div>
-        ) : (
-          <div className="text-muted-foreground text-sm italic">
-            {response.isStreaming ? 'Waiting for response...' : 'No content yet'}
+      <CardContent className="p-0">
+        <div
+          ref={contentRef}
+          onScroll={handleScroll}
+          className="p-4 max-h-96 overflow-y-auto scrollbar-thin"
+        >
+          {response.content ? (
+            <div className="whitespace-pre-wrap text-sm leading-relaxed">
+              {response.content}
+              {response.isStreaming && (
+                <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1 align-text-bottom" />
+              )}
+            </div>
+          ) : (
+            <div className="text-muted-foreground text-sm italic">
+              {response.isStreaming ? 'Waiting for response...' : 'No content yet'}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {response.isComplete && response.metadata.duration && (
+          <div className="px-4 py-2 bg-muted/20 border-t text-xs text-muted-foreground">
+            Completed in {response.metadata.duration}ms
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      {response.isComplete && response.metadata.duration && (
-        <div className="px-4 py-2 bg-muted/20 border-t text-xs text-muted-foreground">
-          Completed in {response.metadata.duration}ms
-        </div>
-      )}
+      </CardContent>
 
       {/* Copy feedback */}
       {copied && (
@@ -218,20 +234,21 @@ export const StreamingResponse: React.FC<StreamingResponseProps> = ({
       {/* Auto-scroll indicator */}
       {response.isStreaming && !isAutoScrolling && (
         <div className="absolute bottom-2 right-2">
-          <button
+          <Button
             onClick={() => {
               setIsAutoScrolling(true);
               if (contentRef.current) {
                 contentRef.current.scrollTop = contentRef.current.scrollHeight;
               }
             }}
-            className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded shadow-lg hover:bg-primary/90 transition-colors"
+            size="sm"
+            className="text-xs px-2 py-1 h-auto shadow-lg"
           >
             ↓ Auto-scroll
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </Card>
   );
 };
 

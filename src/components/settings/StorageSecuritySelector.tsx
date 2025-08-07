@@ -3,6 +3,12 @@ import React, { useState } from 'react';
 import { AlertTriangle, Shield, ShieldAlert, ShieldOff, Info, Check } from 'lucide-react';
 import type { StoragePreference, StorageType, SecurityWarning } from '@/types/storage';
 import { SECURITY_WARNINGS } from '@/types/storage';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface StorageSecuritySelectorProps {
   currentPreference: StoragePreference;
@@ -34,11 +40,11 @@ export const StorageSecuritySelector: React.FC<StorageSecuritySelectorProps> = (
   const getSecurityColor = (level: SecurityWarning['level']) => {
     switch (level) {
       case 'low':
-        return 'border-green-200 bg-green-50';
+        return 'border-green-500/20 bg-accent text-accent-foreground';
       case 'medium':
-        return 'border-orange-200 bg-orange-50';
+        return 'border-orange-500/20 bg-accent text-accent-foreground';
       case 'high':
-        return 'border-red-200 bg-red-50';
+        return 'border-red-500/20 bg-accent text-accent-foreground';
     }
   };
 
@@ -69,7 +75,11 @@ export const StorageSecuritySelector: React.FC<StorageSecuritySelectorProps> = (
       </div>
 
       {/* Storage Options */}
-      <div className="space-y-4">
+      <RadioGroup
+        value={currentPreference.type}
+        onValueChange={(value) => handleStorageTypeChange(value as StorageType)}
+        className="space-y-4"
+      >
         {Object.entries(SECURITY_WARNINGS).map(([type, warning]) => {
           const storageType = type as StorageType;
           const isSelected = currentPreference.type === storageType;
@@ -78,43 +88,43 @@ export const StorageSecuritySelector: React.FC<StorageSecuritySelectorProps> = (
           return (
             <div
               key={storageType}
-              className={`border rounded-lg transition-all ${
-                isSelected 
-                  ? `${getSecurityColor(warning.level)} border-2` 
+              className={`border rounded-lg transition-all cursor-pointer ${
+                isSelected
+                  ? `${getSecurityColor(warning.level)} border-2`
                   : 'border-border hover:border-muted-foreground'
               }`}
+              onClick={() => handleStorageTypeChange(storageType)}
             >
               {/* Option Header */}
               <div className="p-4">
                 <div className="flex items-start space-x-3">
                   <div className="flex-shrink-0 mt-0.5">
-                    <input
-                      type="radio"
+                    <RadioGroupItem
+                      value={storageType}
                       id={storageType}
-                      name="storageType"
-                      checked={isSelected}
-                      onChange={() => handleStorageTypeChange(storageType)}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      className="pointer-events-none"
                     />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <label
-                        htmlFor={storageType}
-                        className="flex items-center space-x-2 cursor-pointer"
-                      >
+                      <div className="flex items-center space-x-2">
                         {getSecurityIcon(warning.level)}
                         <span className="font-medium">{warning.title}</span>
-                      </label>
+                      </div>
 
-                      <button
-                        onClick={() => setShowDetails(isExpanded ? null : storageType)}
-                        className="p-1 hover:bg-muted rounded transition-colors"
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowDetails(isExpanded ? null : storageType);
+                        }}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
                         title="Show details"
                       >
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                      </button>
+                        <Info className="h-4 w-4" />
+                      </Button>
                     </div>
 
                     <p className="text-sm text-muted-foreground mt-1">
@@ -122,7 +132,7 @@ export const StorageSecuritySelector: React.FC<StorageSecuritySelectorProps> = (
                     </p>
 
                     {warning.recommendation && (
-                      <p className="text-sm text-blue-600 mt-1 font-medium">
+                      <p className="text-sm text-primary mt-1 font-medium">
                         {warning.recommendation}
                       </p>
                     )}
@@ -150,51 +160,45 @@ export const StorageSecuritySelector: React.FC<StorageSecuritySelectorProps> = (
                     </div>
 
                     {storageType === 'none' && (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded">
-                        <div className="flex items-start space-x-2">
-                          <Check className="h-4 w-4 text-green-600 mt-0.5" />
-                          <div className="text-sm">
-                            <p className="font-medium text-green-800">Most Secure Option</p>
-                            <p className="text-green-700">
-                              Your API key will only exist in memory and will be lost when you refresh 
-                              the page or close the tab. This provides maximum security but requires 
-                              re-entering your key each session.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      <Alert className="border-green-200 bg-green-50">
+                        <Check className="h-4 w-4 text-green-600" />
+                        <AlertDescription>
+                          <p className="font-medium text-green-800">Most Secure Option</p>
+                          <p className="text-green-700 text-sm">
+                            Your API key will only exist in memory and will be lost when you refresh
+                            the page or close the tab. This provides maximum security but requires
+                            re-entering your key each session.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
                     )}
 
                     {storageType === 'session' && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                        <div className="flex items-start space-x-2">
-                          <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-                          <div className="text-sm">
-                            <p className="font-medium text-blue-800">Recommended Balance</p>
-                            <p className="text-blue-700">
-                              Your API key will persist for the current browser session but will be 
-                              cleared when you close the tab. This provides a good balance between 
-                              security and convenience.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      <Alert className="border-blue-200 bg-blue-50">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <AlertDescription>
+                          <p className="font-medium text-blue-800">Recommended Balance</p>
+                          <p className="text-blue-700 text-sm">
+                            Your API key will persist for the current browser session but will be
+                            cleared when you close the tab. This provides a good balance between
+                            security and convenience.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
                     )}
 
                     {storageType === 'local' && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded">
-                        <div className="flex items-start space-x-2">
-                          <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
-                          <div className="text-sm">
-                            <p className="font-medium text-red-800">Highest Risk</p>
-                            <p className="text-red-700">
-                              Your API key will be stored permanently in your browser until manually 
-                              cleared. Only use this option if you understand the risks and have 
-                              strict spending limits on your API account.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      <Alert variant="destructive" className="border-red-200 bg-red-50">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <p className="font-medium">Highest Risk</p>
+                          <p className="text-sm">
+                            Your API key will be stored permanently in your browser until manually
+                            cleared. Only use this option if you understand the risks and have
+                            strict spending limits on your API account.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 </div>
@@ -202,57 +206,38 @@ export const StorageSecuritySelector: React.FC<StorageSecuritySelectorProps> = (
             </div>
           );
         })}
-      </div>
+      </RadioGroup>
 
       {/* Risk Acknowledgment */}
       {currentPreference.type !== 'none' && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-medium text-yellow-800 mb-2">
-                Security Acknowledgment Required
-              </h4>
-              <p className="text-sm text-yellow-700 mb-3">
-                By selecting this storage option, you acknowledge the security risks outlined above. 
-                Please ensure you understand the implications before proceeding.
-              </p>
-              
-              <label className="flex items-start space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={currentPreference.acknowledgedRisks}
-                  onChange={(e) => handleRiskAcknowledgment(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                />
-                <span className="text-sm text-yellow-800">
-                  I understand and accept the security risks associated with{' '}
-                  <strong>
-                    {SECURITY_WARNINGS[currentPreference.type].title.toLowerCase()}
-                  </strong>
-                </span>
-              </label>
+        <Alert className="border-border bg-muted/50 cursor-pointer" onClick={() => handleRiskAcknowledgment(!currentPreference.acknowledgedRisks)}>
+          <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+          <AlertDescription>
+            <h4 className="font-medium text-foreground mb-2">
+              Security Acknowledgment Required
+            </h4>
+            <p className="text-sm text-muted-foreground mb-3">
+              By selecting this storage option, you acknowledge the security risks outlined above.
+              Please ensure you understand the implications before proceeding.
+            </p>
+            
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="risk-acknowledgment"
+                checked={currentPreference.acknowledgedRisks}
+                onCheckedChange={handleRiskAcknowledgment}
+                className="pointer-events-none"
+              />
+              <div className="text-sm text-foreground">
+                I understand and accept the security risks associated with{' '}
+                <strong>
+                  {SECURITY_WARNINGS[currentPreference.type].title.toLowerCase()}
+                </strong>
+              </div>
             </div>
-          </div>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
-
-      {/* Current Status */}
-      <div className="p-4 bg-muted/30 rounded-lg">
-        <h4 className="font-medium mb-2">Current Configuration</h4>
-        <div className="flex items-center space-x-2 text-sm">
-          {getSecurityIcon(SECURITY_WARNINGS[currentPreference.type].level)}
-          <span>
-            <strong>{SECURITY_WARNINGS[currentPreference.type].title}</strong>
-          </span>
-          {currentPreference.acknowledgedRisks && currentPreference.type !== 'none' && (
-            <span className="text-green-600">(Risks Acknowledged)</span>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground mt-1">
-          {SECURITY_WARNINGS[currentPreference.type].description}
-        </p>
-      </div>
     </div>
   );
 };
