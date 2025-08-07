@@ -171,10 +171,9 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
 
       {/* Grid */}
       <div
-        className="grid gap-1"
+        className="prompt-grid-container"
         style={{
-          gridTemplateColumns: `repeat(${gridColumns}, minmax(150px, 1fr))`,
-          gap: '2px'
+          gridTemplateColumns: `repeat(${gridColumns}, minmax(150px, 1fr))`
         }}
       >
         {prompts.map((prompt, index) => {
@@ -239,8 +238,8 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
                     </div>
 
                     <div
-                      className={`p-1 border rounded bg-muted/30 ${
-                        hasError ? 'border-destructive bg-destructive/5' : ''
+                      className={`prompt-response-container ${
+                        hasError ? 'prompt-response-error' : ''
                       }`}
                       style={
                         isExpanded
@@ -271,10 +270,7 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
 
                 {/* Loading State */}
                 {isLoading && !response && (
-                  <div
-                    className="p-1 border rounded bg-muted/30 flex items-center justify-center"
-                    style={{ height: '2rem' }}
-                  >
+                  <div className="prompt-loading-container">
                     <div className="flex items-center space-x-1 text-muted-foreground">
                       <div className="w-1 h-1 border border-primary border-t-transparent rounded-full animate-spin"></div>
                       <span style={{ fontSize: `${fontSize}px` }}>•••</span>

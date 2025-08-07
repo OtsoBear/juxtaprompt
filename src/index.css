@@ -68,16 +68,57 @@
   }
 }
 
-/* Custom scrollbar styles */
+/* Custom scrollbar styles with fallbacks */
 @layer utilities {
   .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
+    /* Fallback for older browsers */
+    overflow: auto;
+  }
+  
+  /* Modern browsers that support scrollbar-width */
+  @supports (scrollbar-width: thin) {
+    .scrollbar-thin {
+      scrollbar-width: thin;
+      scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
+    }
   }
   
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
+  }
+  
+  /* PromptGrid specific styles */
+  .prompt-grid-container {
+    display: grid;
+    gap: 2px;
+  }
+  
+  .prompt-response-container {
+    padding: 0.25rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    background-color: hsl(var(--muted) / 0.3);
+  }
+  
+  .prompt-response-error {
+    border-color: hsl(var(--destructive));
+    background-color: hsl(var(--destructive) / 0.05);
+  }
+  
+  .prompt-loading-container {
+    padding: 0.25rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    background-color: hsl(var(--muted) / 0.3);
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .hidden-form-input {
+    display: none;
   }
   
   .scrollbar-thin::-webkit-scrollbar-track {

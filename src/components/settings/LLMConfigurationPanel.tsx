@@ -359,7 +359,7 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
                 name="username"
                 value={`${formData.provider} api key`}
                 autoComplete="username"
-                style={{ display: 'none' }}
+                className="hidden-form-input"
                 readOnly
                 aria-hidden="true"
                 tabIndex={-1}

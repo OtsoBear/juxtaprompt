@@ -282,7 +282,6 @@ export abstract class BaseLLMProvider implements ILLMProvider {
             }
 
             try {
-              const parsed = JSON.parse(data);
               const chunk = this.parseStreamChunk(data, requestId);
               if (chunk) {
                 yield chunk;
