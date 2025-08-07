@@ -132,7 +132,7 @@ export class AnthropicProvider extends BaseLLMProvider {
           }
           return null;
 
-        case 'message_stop':
+        case 'message_stop': {
           const completionChunk: LLMStreamChunk = {
             requestId,
             content: '',
@@ -141,6 +141,7 @@ export class AnthropicProvider extends BaseLLMProvider {
           
           this.logResponse(completionChunk);
           return completionChunk;
+        }
 
         default:
           return null;
