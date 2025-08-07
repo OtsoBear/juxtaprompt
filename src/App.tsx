@@ -59,7 +59,7 @@ const App: React.FC = () => {
       ui: {
         ...DEFAULT_UI_STATE,
         ...(urlState?.ui && Object.fromEntries(
-          Object.entries(urlState.ui).filter(([_, value]) => value !== undefined)
+          Object.entries(urlState.ui).filter(([, value]) => value !== undefined)
         ))
       },
       isLoading: false,
