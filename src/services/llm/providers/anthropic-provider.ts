@@ -275,7 +275,7 @@ export class AnthropicProvider extends BaseLLMProvider {
    * Fetch available models from Anthropic API
    * Note: Anthropic doesn't provide a public models endpoint, so we return static models
    */
-  protected async fetchAvailableModels(apiKey: string, baseUrl?: string): Promise<ModelInfo[]> {
+  protected async fetchAvailableModels(): Promise<ModelInfo[]> {
     // Anthropic doesn't have a public models API endpoint
     // We could potentially make a test request to validate the API key
     // but for now, we'll return the static models

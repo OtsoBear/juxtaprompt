@@ -14,8 +14,11 @@ import { urlStateManager } from '@/services/url-state';
 import { llmProviderManager } from '@/services/llm';
 import { openaiProvider, anthropicProvider, geminiProvider } from '@/services/llm/providers';
 import { PromptGrid } from '@/components/layout';
-import { LLMConfigurationPanel } from '@/components/settings';
 import { SimpleThemeToggle } from '@/components/ui';
+// Lazy load settings panel since it's only shown when needed
+const LLMConfigurationPanel = React.lazy(() =>
+  import('@/components/settings').then(module => ({ default: module.LLMConfigurationPanel }))
+);
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -63,7 +66,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
 
   // Theme management
-  const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme(
+  const { theme, resolvedTheme, toggleTheme } = useTheme(
     state.ui.theme,
     (newTheme) => {
       updateUIState({ theme: newTheme });
@@ -206,6 +209,119 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, responses: [] }));
   }, []);
 
+  const sendSinglePrompt = useCallback(async (promptId: string) => {
+    if (!state.config) {
+      setError('No LLM configuration available');
+      return;
+    }
+
+    const prompt = state.prompts.find(p => p.id === promptId);
+    if (!prompt || !prompt.content.trim()) {
+      return;
+    }
+
+    // Clear existing response for this prompt
+    setState(prev => ({
+      ...prev,
+      responses: prev.responses.filter(r => r.promptId !== promptId),
+      error: null
+    }));
+
+    try {
+      const requestResult = llmProviderManager.createRequest(
+        prompt.content,
+        state.config!
+      );
+
+      if (!requestResult.success) {
+        throw new Error(`Invalid request: ${requestResult.error.message}`);
+      }
+
+      const request = requestResult.data;
+      let fullContent = '';
+
+      try {
+        for await (const chunk of llmProviderManager.sendStreamingRequest(request)) {
+          if (chunk.content) {
+            fullContent += chunk.content;
+            
+            // Update response in real-time
+            setState(prev => {
+              const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
+              const response: ResponseItem = {
+                id: `response-${prompt.id}`,
+                promptId: prompt.id,
+                response: {
+                  requestId: request.id,
+                  content: fullContent,
+                  isComplete: chunk.isComplete,
+                  isStreaming: !chunk.isComplete,
+                  metadata: {
+                    ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
+                    model: state.config!.model,
+                    provider: state.config!.provider,
+                    timestamp: Date.now(),
+                  },
+                },
+                createdAt: Date.now(),
+              };
+
+              if (existingIndex >= 0) {
+                const newResponses = [...prev.responses];
+                newResponses[existingIndex] = response;
+                return { ...prev, responses: newResponses };
+              } else {
+                return { ...prev, responses: [...prev.responses, response] };
+              }
+            });
+          }
+
+          if (chunk.isComplete) {
+            break;
+          }
+        }
+      } catch (error) {
+        console.error(`Error streaming response for prompt ${prompt.id}:`, error);
+        
+        // Add error response
+        const errorResponse: ResponseItem = {
+          id: `response-${prompt.id}`,
+          promptId: prompt.id,
+          response: {
+            requestId: request.id,
+            content: '',
+            isComplete: true,
+            isStreaming: false,
+            error: {
+              code: 'STREAMING_ERROR',
+              message: error instanceof Error ? error.message : 'Unknown streaming error',
+              retryable: true,
+            },
+            metadata: {
+              model: state.config!.model,
+              provider: state.config!.provider,
+              timestamp: Date.now(),
+            },
+          },
+          createdAt: Date.now(),
+        };
+
+        setState(prev => {
+          const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
+          if (existingIndex >= 0) {
+            const newResponses = [...prev.responses];
+            newResponses[existingIndex] = errorResponse;
+            return { ...prev, responses: newResponses };
+          } else {
+            return { ...prev, responses: [...prev.responses, errorResponse] };
+          }
+        });
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unknown error occurred');
+    }
+  }, [state.config, state.prompts, setError]);
+
   const sendPrompts = useCallback(async () => {
     if (!state.config) {
       setError('No LLM configuration available');
@@ -222,8 +338,7 @@ const App: React.FC = () => {
 
     try {
       // Send all prompts concurrently
-      const promises = state.prompts
-        .filter(prompt => prompt.content.trim().length > 0)
+      const promises = promptsWithContent
         .map(async (prompt) => {
           const requestResult = llmProviderManager.createRequest(
             prompt.content,
@@ -324,6 +439,20 @@ const App: React.FC = () => {
     }
   }, [state.config, state.prompts, setError, clearResponses]);
 
+  // Memoized expensive computations
+  const promptsWithContent = useMemo(() =>
+    state.prompts.filter(p => p.content.trim().length > 0),
+    [state.prompts]
+  );
+
+  const responsesByPromptId = useMemo(() => {
+    const map = new Map();
+    state.responses.forEach(response => {
+      map.set(response.promptId, response);
+    });
+    return map;
+  }, [state.responses]);
+
   // Memoized context value
   const contextValue = useMemo(() => ({
     ...state,
@@ -335,6 +464,7 @@ const App: React.FC = () => {
       setConfig,
       updateUIState,
       sendPrompts,
+      sendSinglePrompt,
       clearResponses,
       setError,
     },
@@ -347,6 +477,7 @@ const App: React.FC = () => {
     setConfig,
     updateUIState,
     sendPrompts,
+    sendSinglePrompt,
     clearResponses,
     setError,
   ]);
@@ -436,7 +567,7 @@ const App: React.FC = () => {
               </div>
 
               <div className="flex items-center space-x-2">
-                {contextValue.prompts.some(p => p.content.trim()) && contextValue.config && (
+                {promptsWithContent.length > 0 && contextValue.config && (
                   <Button
                     onClick={sendPrompts}
                     disabled={contextValue.isLoading}
@@ -465,7 +596,10 @@ const App: React.FC = () => {
               onPromptChange={updatePrompt}
               onPromptRemove={removePrompt}
               onPromptAdd={addPrompt}
+              onSendSinglePrompt={sendSinglePrompt}
               isLoading={contextValue.isLoading}
+              config={contextValue.config}
+              uiState={contextValue.ui}
             />
           </div>
         </main>
@@ -495,10 +629,12 @@ const App: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-lg font-medium mb-4">LLM Configuration</h3>
-                <LLMConfigurationPanel
-                  config={contextValue.config}
-                  onConfigChange={setConfig}
-                />
+                <React.Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+                  <LLMConfigurationPanel
+                    config={contextValue.config}
+                    onConfigChange={setConfig}
+                  />
+                </React.Suspense>
               </div>
             </div>
           </DialogContent>

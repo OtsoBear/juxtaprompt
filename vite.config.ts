@@ -16,11 +16,37 @@ export default defineConfig(({ command }) => ({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          validation: ['zod'],
-          llm: ['./src/services/llm'],
-          ui: ['./src/components/ui']
+        manualChunks: (id) => {
+          // Vendor chunk for core React libraries
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('zod')) {
+              return 'validation';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'ui-vendor';
+            }
+            return 'vendor';
+          }
+          
+          // App chunks
+          if (id.includes('/src/services/llm/')) {
+            return 'llm-services';
+          }
+          if (id.includes('/src/components/ui/')) {
+            return 'ui-components';
+          }
+          if (id.includes('/src/components/')) {
+            return 'components';
+          }
+          if (id.includes('/src/services/')) {
+            return 'services';
+          }
         },
       },
     },
@@ -45,9 +71,26 @@ export default defineConfig(({ command }) => ({
       strict: false,
     },
   },
-  // Optimize dependencies
+  // Optimize dependencies for faster dev server startup
   optimizeDeps: {
-    include: ['react', 'react-dom', 'zod', 'lucide-react'],
+    include: [
+      'react',
+      'react-dom',
+      'zod',
+      'lucide-react',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-label',
+      '@radix-ui/react-radio-group',
+      '@radix-ui/react-select',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-slider',
+      '@radix-ui/react-slot',
+      'class-variance-authority',
+      'clsx',
+      'tailwind-merge'
+    ],
+    exclude: ['@vite/client', '@vite/env'],
   },
   // Define environment variables
   define: {

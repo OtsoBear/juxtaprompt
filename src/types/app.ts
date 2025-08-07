@@ -78,7 +78,10 @@ export interface PromptGridProps extends BaseComponentProps {
   readonly onPromptChange: (id: string, content: string) => void;
   readonly onPromptRemove: (id: string) => void;
   readonly onPromptAdd: (content?: string, title?: string) => void;
+  readonly onSendSinglePrompt?: (id: string) => void;
   readonly isLoading: boolean;
+  readonly config?: LLMConfig | null;
+  readonly uiState?: UIState;
 }
 
 export interface SettingsPanelProps extends BaseComponentProps {

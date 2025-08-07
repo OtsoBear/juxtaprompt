@@ -14,15 +14,21 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 
-// Simple debounce utility
+// Optimized debounce utility with immediate execution option
 const debounce = <T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
+  immediate = false
 ): ((...args: Parameters<T>) => void) => {
-  let timeout: NodeJS.Timeout;
+  let timeout: NodeJS.Timeout | null = null;
   return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
+    const callNow = immediate && !timeout;
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      timeout = null;
+      if (!immediate) func(...args);
+    }, wait);
+    if (callNow) func(...args);
   };
 };
 
@@ -35,7 +41,7 @@ interface LLMConfigurationPanelProps {
 /**
  * Advanced LLM configuration interface with provider-specific settings
  */
-export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
+export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React.memo(({
   config,
   onConfigChange,
   className = '',
@@ -599,6 +605,6 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default LLMConfigurationPanel;

@@ -1,6 +1,5 @@
 // src/hooks/useTheme.ts
 import { useEffect, useState, useCallback } from 'react';
-import type { UIState } from '@/types/url-state';
 
 type Theme = 'light' | 'dark' | 'system';
 

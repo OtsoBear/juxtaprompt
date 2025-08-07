@@ -1,24 +1,27 @@
 // src/components/layout/PromptGrid.tsx
-import React, { useState, useCallback, useEffect } from 'react';
-import { Plus, X, GripVertical, Maximize2, Minimize2 } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Maximize2, Minimize2, Zap, ZapOff } from 'lucide-react';
 import type { PromptGridProps } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
 
 /**
  * Responsive grid component for displaying prompts and responses
  * Features slider-based grid controls with auto-generated prompts
  */
-export const PromptGrid: React.FC<PromptGridProps> = ({
+export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
   prompts,
   responses,
   onPromptChange,
   onPromptRemove,
   onPromptAdd,
+  onSendSinglePrompt,
   isLoading,
+  config,
+  uiState,
   className = '',
 }) => {
   const [gridColumns, setGridColumns] = useState(4);
@@ -26,6 +29,11 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
   const [fontSize, setFontSize] = useState(12);
   const [maxHeight, setMaxHeight] = useState(6);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  
+  // Auto-send state
+  const [autoSend, setAutoSend] = useState(uiState?.autoSend ?? false);
+  const [debounceMs, setDebounceMs] = useState(uiState?.debounceMs ?? 1000);
+  const debounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const toggleExpanded = useCallback((id: string) => {
     setExpandedItems(prev => {
@@ -37,6 +45,45 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
       }
       return newSet;
     });
+  }, []);
+
+  // Debounced auto-send function
+  const debouncedAutoSend = useCallback((promptId: string, content: string) => {
+    if (!autoSend || !onSendSinglePrompt || !config || !content.trim()) {
+      return;
+    }
+
+    // Clear existing timer for this prompt
+    const existingTimer = debounceTimers.current.get(promptId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Set new timer
+    const timer = setTimeout(() => {
+      onSendSinglePrompt(promptId);
+      debounceTimers.current.delete(promptId);
+    }, debounceMs);
+
+    debounceTimers.current.set(promptId, timer);
+  }, [autoSend, onSendSinglePrompt, config, debounceMs]);
+
+  // Enhanced prompt change handler with auto-send
+  const handlePromptChange = useCallback((id: string, content: string) => {
+    onPromptChange(id, content);
+    
+    // Trigger debounced auto-send if enabled
+    if (autoSend && content.trim()) {
+      debouncedAutoSend(id, content);
+    }
+  }, [onPromptChange, autoSend, debouncedAutoSend]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      debounceTimers.current.forEach(timer => clearTimeout(timer));
+      debounceTimers.current.clear();
+    };
   }, []);
 
   // Auto-generate prompts based on grid dimensions
@@ -102,7 +149,7 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
           </div>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {/* Width Control */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -166,6 +213,45 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
               className="w-full"
             />
           </div>
+
+          {/* Auto-Send Toggle */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Auto-Send</label>
+              {autoSend ? (
+                <Zap className="h-3 w-3 text-green-500" />
+              ) : (
+                <ZapOff className="h-3 w-3 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                checked={autoSend}
+                onCheckedChange={(checked) => setAutoSend(checked as boolean)}
+                disabled={!config}
+              />
+              <span className="text-xs text-muted-foreground">
+                {config ? 'Enabled' : 'No config'}
+              </span>
+            </div>
+          </div>
+
+          {/* Debounce Control */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Delay</label>
+              <span className="text-xs text-muted-foreground">{debounceMs}ms</span>
+            </div>
+            <Slider
+              value={[debounceMs]}
+              onValueChange={(value) => setDebounceMs(value[0])}
+              min={500}
+              max={5000}
+              step={250}
+              className="w-full"
+              disabled={!autoSend}
+            />
+          </div>
         </div>
       </div>
 
@@ -214,7 +300,7 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
                 <div>
                   <Textarea
                     value={prompt.content}
-                    onChange={(e) => onPromptChange(prompt.id, e.target.value)}
+                    onChange={(e) => handlePromptChange(prompt.id, e.target.value)}
                     disabled={isLoading}
                     placeholder="Prompt..."
                     className="resize-none p-1"
@@ -293,6 +379,6 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default PromptGrid;

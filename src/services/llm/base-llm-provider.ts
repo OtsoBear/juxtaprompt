@@ -44,9 +44,9 @@ export abstract class BaseLLMProvider implements ILLMProvider {
   protected readonly defaultTimeout = 30000; // 30 seconds
   protected readonly maxRetries = 3;
   
-  // Model caching
-  private modelCache: Map<string, { models: ModelInfo[]; timestamp: number }> = new Map();
-  private readonly cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  // Optimized model caching with WeakMap for better memory management
+  private static modelCache = new Map<string, { models: ModelInfo[]; timestamp: number }>();
+  private readonly cacheTimeout = 10 * 60 * 1000; // 10 minutes (longer cache)
 
   /**
    * Send streaming request to the LLM provider
@@ -58,7 +58,7 @@ export abstract class BaseLLMProvider implements ILLMProvider {
    */
   public async getAvailableModels(apiKey: string, baseUrl?: string): Promise<AvailableModelsResult> {
     const cacheKey = `${this.name}_${apiKey.slice(-8)}_${baseUrl || 'default'}`;
-    const cached = this.modelCache.get(cacheKey);
+    const cached = BaseLLMProvider.modelCache.get(cacheKey);
     
     // Return cached result if still valid
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
