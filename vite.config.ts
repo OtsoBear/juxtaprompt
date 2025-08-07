@@ -54,8 +54,9 @@ export default defineConfig(({ command }) => ({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true,
+        drop_console: false,
         drop_debugger: true,
+        pure_funcs: ['console.log'],
       },
     },
     // Increase chunk size warning limit for better performance
