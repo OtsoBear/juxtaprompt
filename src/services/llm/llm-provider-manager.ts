@@ -16,7 +16,6 @@ import { LLMProviderError } from './base-llm-provider';
 export class LLMProviderManager {
   private readonly providers = new Map<LLMProvider, ILLMProvider>();
   private readonly activeRequests = new Map<string, AbortController>();
-  private readonly pendingRequests = new Map<string, Promise<AvailableModelsResult>>();
 
   /**
    * Register an LLM provider

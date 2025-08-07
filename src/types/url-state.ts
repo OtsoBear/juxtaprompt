@@ -1,5 +1,4 @@
 // src/types/url-state.ts
-import type { LLMConfig } from './llm';
 
 export interface UIState {
   readonly gridColumns: number;
@@ -11,8 +10,23 @@ export interface UIState {
 
 export interface URLState {
   readonly prompts: ReadonlyArray<string>;
-  readonly config: Partial<LLMConfig>;
-  readonly ui: Partial<UIState>;
+  readonly config: {
+    readonly provider?: 'openai' | 'anthropic' | 'gemini' | undefined;
+    readonly model?: string | undefined;
+    readonly temperature?: number | undefined;
+    readonly maxTokens?: number | undefined;
+    readonly topP?: number | undefined;
+    readonly frequencyPenalty?: number | undefined;
+    readonly presencePenalty?: number | undefined;
+    readonly systemMessage?: string | undefined;
+  };
+  readonly ui: {
+    readonly gridColumns?: number | undefined;
+    readonly autoSend?: boolean | undefined;
+    readonly debounceMs?: number | undefined;
+    readonly showAdvancedSettings?: boolean | undefined;
+    readonly theme?: 'light' | 'dark' | 'system' | undefined;
+  };
 }
 
 export interface URLStateService {

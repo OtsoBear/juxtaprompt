@@ -40,8 +40,8 @@ export class GeminiProvider extends BaseLLMProvider {
   /**
    * Get authentication headers for Gemini
    */
-  protected getAuthHeaders(apiKey: string): Record<string, string> {
-    // Gemini uses API key as query parameter, but we'll also include it in headers
+  protected getAuthHeaders(): Record<string, string> {
+    // Gemini uses API key as query parameter, not in headers
     return {};
   }
 

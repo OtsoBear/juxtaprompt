@@ -56,7 +56,12 @@ const App: React.FC = () => {
       ],
       responses: [],
       config: null,
-      ui: { ...DEFAULT_UI_STATE, ...urlState?.ui },
+      ui: {
+        ...DEFAULT_UI_STATE,
+        ...(urlState?.ui && Object.fromEntries(
+          Object.entries(urlState.ui).filter(([_, value]) => value !== undefined)
+        ))
+      },
       isLoading: false,
       error: null,
     };
@@ -445,13 +450,6 @@ const App: React.FC = () => {
     [state.prompts]
   );
 
-  const responsesByPromptId = useMemo(() => {
-    const map = new Map();
-    state.responses.forEach(response => {
-      map.set(response.promptId, response);
-    });
-    return map;
-  }, [state.responses]);
 
   // Memoized context value
   const contextValue = useMemo(() => ({

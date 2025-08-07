@@ -4,7 +4,6 @@ import { AlertTriangle, Shield, ShieldAlert, ShieldOff, Info, Check } from 'luci
 import type { StoragePreference, StorageType, SecurityWarning } from '@/types/storage';
 import { SECURITY_WARNINGS } from '@/types/storage';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';

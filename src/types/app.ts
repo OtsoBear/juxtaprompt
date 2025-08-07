@@ -1,5 +1,5 @@
 // src/types/app.ts
-import type { LLMConfig, LLMResponse, LLMProvider } from './llm';
+import type { LLMConfig, LLMResponse } from './llm';
 import type { UIState } from './url-state';
 
 export interface PromptItem {
