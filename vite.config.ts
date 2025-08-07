@@ -16,37 +16,11 @@ export default defineConfig(({ command }) => ({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // Vendor chunk for core React libraries
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'react-vendor';
-            }
-            if (id.includes('zod')) {
-              return 'validation';
-            }
-            if (id.includes('lucide-react')) {
-              return 'icons';
-            }
-            if (id.includes('@radix-ui')) {
-              return 'ui-vendor';
-            }
-            return 'vendor';
-          }
-          
-          // App chunks
-          if (id.includes('/src/services/llm/')) {
-            return 'llm-services';
-          }
-          if (id.includes('/src/components/ui/')) {
-            return 'ui-components';
-          }
-          if (id.includes('/src/components/')) {
-            return 'components';
-          }
-          if (id.includes('/src/services/')) {
-            return 'services';
-          }
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'ui-vendor': ['@radix-ui/react-checkbox', '@radix-ui/react-dialog', '@radix-ui/react-label', '@radix-ui/react-radio-group', '@radix-ui/react-select', '@radix-ui/react-separator', '@radix-ui/react-slider', '@radix-ui/react-slot'],
+          'validation': ['zod'],
+          'icons': ['lucide-react'],
         },
       },
     },
