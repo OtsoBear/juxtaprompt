@@ -112,7 +112,7 @@ describe('EnhancedStorageService', () => {
         
         storageService.saveAPIKey('openai', 'test-key');
         
-        expect(mockSessionStorage.setItem).toHaveBeenCalledWith('openai_api_key', 'test-key');
+        expect(mockSessionStorage.setItem).toHaveBeenCalledWith('juxtaprompt_api_key_openai', 'test-key');
       });
 
       it('should save to localStorage when preference is "local"', () => {
@@ -123,7 +123,7 @@ describe('EnhancedStorageService', () => {
         
         storageService.saveAPIKey('openai', 'test-key');
         
-        expect(mockLocalStorage.setItem).toHaveBeenCalledWith('openai_api_key', 'test-key');
+        expect(mockLocalStorage.setItem).toHaveBeenCalledWith('juxtaprompt_api_key_openai', 'test-key');
       });
     });
 
@@ -152,7 +152,7 @@ describe('EnhancedStorageService', () => {
         const key = storageService.getAPIKey('openai');
         
         expect(key).toBe('test-key');
-        expect(mockSessionStorage.getItem).toHaveBeenCalledWith('openai_api_key');
+        expect(mockSessionStorage.getItem).toHaveBeenCalledWith('juxtaprompt_api_key_openai');
       });
 
       it('should retrieve from localStorage when preference is "local"', () => {
@@ -185,8 +185,8 @@ describe('EnhancedStorageService', () => {
       it('should clear from all storage locations', () => {
         storageService.clearAPIKey('openai');
         
-        expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('openai_api_key');
-        expect(mockSessionStorage.removeItem).toHaveBeenCalledWith('openai_api_key');
+        expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('juxtaprompt_api_key_openai');
+        expect(mockSessionStorage.removeItem).toHaveBeenCalledWith('juxtaprompt_api_key_openai');
       });
     });
   });
@@ -201,8 +201,8 @@ describe('EnhancedStorageService', () => {
       storageService.saveAPIKey('openai', 'openai-key');
       storageService.saveAPIKey('anthropic', 'anthropic-key');
       
-      expect(mockSessionStorage.setItem).toHaveBeenCalledWith('openai_api_key', 'openai-key');
-      expect(mockSessionStorage.setItem).toHaveBeenCalledWith('anthropic_api_key', 'anthropic-key');
+      expect(mockSessionStorage.setItem).toHaveBeenCalledWith('juxtaprompt_api_key_openai', 'openai-key');
+      expect(mockSessionStorage.setItem).toHaveBeenCalledWith('juxtaprompt_api_key_anthropic', 'anthropic-key');
     });
   });
 
