@@ -15,7 +15,7 @@ import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 
 // Optimized debounce utility with immediate execution option
-const debounce = <T extends (...args: any[]) => any>(
+const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number,
   immediate = false
@@ -230,37 +230,41 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
 
   // Auto-save configuration with debouncing
   const autoSaveConfig = useCallback(
-    debounce((configToSave: Partial<LLMConfig>) => {
-      if (!configToSave.provider || !configToSave.apiKey) {
-        return;
-      }
-
-      try {
-        // Save the API key to storage
-        storageService.saveAPIKey(configToSave.provider, configToSave.apiKey);
-
-        const fullConfig: LLMConfig = {
-          provider: configToSave.provider,
-          apiKey: configToSave.apiKey,
-          baseUrl: configToSave.baseUrl || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].baseUrl,
-          model: configToSave.model || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].model,
-          temperature: configToSave.temperature ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].temperature,
-          maxTokens: configToSave.maxTokens ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].maxTokens,
-          topP: configToSave.topP ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].topP,
-          frequencyPenalty: configToSave.frequencyPenalty ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].frequencyPenalty,
-          presencePenalty: configToSave.presencePenalty ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].presencePenalty,
-          systemMessage: configToSave.systemMessage || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].systemMessage,
-        };
-
-        // Validate before saving
-        const validation = llmProviderManager.validateConfig(configToSave.provider, fullConfig);
-        if (validation.success) {
-          onConfigChange(validation.data);
+    (configToSave: Partial<LLMConfig>) => {
+      const debouncedSave = debounce(() => {
+        if (!configToSave.provider || !configToSave.apiKey) {
+          return;
         }
-      } catch (error) {
-        console.warn('Auto-save failed:', error);
-      }
-    }, 1000),
+
+        try {
+          // Save the API key to storage
+          storageService.saveAPIKey(configToSave.provider, configToSave.apiKey);
+
+          const fullConfig: LLMConfig = {
+            provider: configToSave.provider,
+            apiKey: configToSave.apiKey,
+            baseUrl: configToSave.baseUrl || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].baseUrl,
+            model: configToSave.model || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].model,
+            temperature: configToSave.temperature ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].temperature,
+            maxTokens: configToSave.maxTokens ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].maxTokens,
+            topP: configToSave.topP ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].topP,
+            frequencyPenalty: configToSave.frequencyPenalty ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].frequencyPenalty,
+            presencePenalty: configToSave.presencePenalty ?? DEFAULT_PROVIDER_CONFIGS[configToSave.provider].presencePenalty,
+            systemMessage: configToSave.systemMessage || DEFAULT_PROVIDER_CONFIGS[configToSave.provider].systemMessage,
+          };
+
+          // Validate before saving
+          const validation = llmProviderManager.validateConfig(configToSave.provider, fullConfig);
+          if (validation.success) {
+            onConfigChange(validation.data);
+          }
+        } catch (error) {
+          console.warn('Auto-save failed:', error);
+        }
+      }, 1000);
+      
+      debouncedSave();
+    },
     [onConfigChange]
   );
 

@@ -327,6 +327,12 @@ const App: React.FC = () => {
     }
   }, [state.config, state.prompts, setError]);
 
+  // Memoized expensive computations
+  const promptsWithContent = useMemo(() =>
+    state.prompts.filter(p => p.content.trim().length > 0),
+    [state.prompts]
+  );
+
   const sendPrompts = useCallback(async () => {
     if (!state.config) {
       setError('No LLM configuration available');
@@ -442,13 +448,7 @@ const App: React.FC = () => {
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [state.config, state.prompts, setError, clearResponses]);
-
-  // Memoized expensive computations
-  const promptsWithContent = useMemo(() =>
-    state.prompts.filter(p => p.content.trim().length > 0),
-    [state.prompts]
-  );
+  }, [state.config, state.prompts, setError, clearResponses, promptsWithContent]);
 
 
   // Memoized context value

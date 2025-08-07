@@ -5,8 +5,18 @@ import type { StoragePreference } from '@/types/storage';
 
 describe('EnhancedStorageService', () => {
   let storageService: EnhancedStorageService;
-  let mockLocalStorage: any;
-  let mockSessionStorage: any;
+  let mockLocalStorage: {
+    getItem: ReturnType<typeof vi.fn>;
+    setItem: ReturnType<typeof vi.fn>;
+    removeItem: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+  };
+  let mockSessionStorage: {
+    getItem: ReturnType<typeof vi.fn>;
+    setItem: ReturnType<typeof vi.fn>;
+    removeItem: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     // Reset mocks

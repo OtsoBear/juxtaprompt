@@ -80,9 +80,10 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
 
   // Cleanup timers on unmount
   useEffect(() => {
+    const timers = debounceTimers.current;
     return () => {
-      debounceTimers.current.forEach(timer => clearTimeout(timer));
-      debounceTimers.current.clear();
+      timers.forEach(timer => clearTimeout(timer));
+      timers.clear();
     };
   }, []);
 
@@ -106,7 +107,7 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
         onPromptRemove(prompt.id);
       });
     }
-  }, [gridColumns, gridRows, prompts.length, onPromptAdd, onPromptRemove]);
+  }, [gridColumns, gridRows, prompts.length, prompts, onPromptAdd, onPromptRemove]);
 
   const handleColumnsChange = useCallback((value: number[]) => {
     setGridColumns(value[0]);

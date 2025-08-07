@@ -157,7 +157,7 @@ export class LLMProviderManager {
   public clearModelCache(providerName: LLMProvider): void {
     const provider = this.getProvider(providerName);
     if (provider && 'clearModelCache' in provider) {
-      (provider as any).clearModelCache();
+      (provider as { clearModelCache(): void }).clearModelCache();
     }
   }
 
@@ -167,7 +167,7 @@ export class LLMProviderManager {
   public clearAllModelCaches(): void {
     for (const provider of this.providers.values()) {
       if ('clearModelCache' in provider) {
-        (provider as any).clearModelCache();
+        (provider as { clearModelCache(): void }).clearModelCache();
       }
     }
   }

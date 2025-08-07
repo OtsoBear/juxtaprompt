@@ -101,13 +101,20 @@ export class OpenAIProvider extends BaseLLMProvider {
       const content = choice.delta.content || '';
       const isComplete = choice.finish_reason !== null;
 
+      // Define interface for OpenAI response with usage
+      interface OpenAIResponseWithUsage {
+        usage?: {
+          total_tokens: number;
+        };
+      }
+
       const streamChunk: LLMStreamChunk = {
         requestId,
         content,
         isComplete,
-        ...(isComplete && (parsed as any).usage?.total_tokens && {
-          tokenCount: (parsed as any).usage.total_tokens
-        }),
+        ...(isComplete && (parsed as OpenAIResponseWithUsage).usage?.total_tokens ? {
+          tokenCount: (parsed as OpenAIResponseWithUsage).usage!.total_tokens
+        } : {}),
       };
 
       this.logResponse(streamChunk);
@@ -249,9 +256,17 @@ export class OpenAIProvider extends BaseLLMProvider {
         throw new Error('Invalid response format from OpenAI models API');
       }
 
+      // Define interface for OpenAI model response
+      interface OpenAIModel {
+        id: string;
+        object: string;
+        created?: number;
+        owned_by?: string;
+      }
+
       // Filter and map OpenAI models to our ModelInfo format
       const models: ModelInfo[] = data.data
-        .filter((model: any) => {
+        .filter((model: OpenAIModel) => {
           // Only include chat completion models
           return model.id && (
             model.id.startsWith('gpt-') ||
@@ -259,7 +274,7 @@ export class OpenAIProvider extends BaseLLMProvider {
             model.id.includes('turbo')
           );
         })
-        .map((model: any) => ({
+        .map((model: OpenAIModel) => ({
           id: model.id,
           name: model.id,
           description: this.getModelDescription(model.id),

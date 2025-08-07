@@ -305,15 +305,25 @@ export class GeminiProvider extends BaseLLMProvider {
         throw new Error('Invalid response format from Gemini models API');
       }
 
+      // Define interface for Gemini API model response
+      interface GeminiModel {
+        name: string;
+        supportedGenerationMethods?: string[];
+        displayName?: string;
+        description?: string;
+        inputTokenLimit?: number;
+        outputTokenLimit?: number;
+      }
+
       // Filter and map Gemini models to our ModelInfo format
       const models: ModelInfo[] = data.models
-        .filter((model: any) => {
+        .filter((model: GeminiModel) => {
           // Only include generative models that support generateContent
           return model.name &&
                  model.supportedGenerationMethods?.includes('generateContent') &&
                  !model.name.includes('embedding');
         })
-        .map((model: any) => {
+        .map((model: GeminiModel) => {
           const modelId = model.name.replace('models/', '');
           return {
             id: modelId,

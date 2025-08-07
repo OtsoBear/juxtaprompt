@@ -8,6 +8,8 @@ Object.defineProperty(window, 'localStorage', {
     setItem: vi.fn(),
     removeItem: vi.fn(),
     clear: vi.fn(),
+    length: 0,
+    key: vi.fn(),
   },
   writable: true,
 });
@@ -18,6 +20,8 @@ Object.defineProperty(window, 'sessionStorage', {
     setItem: vi.fn(),
     removeItem: vi.fn(),
     clear: vi.fn(),
+    length: 0,
+    key: vi.fn(),
   },
   writable: true,
 });
@@ -53,4 +57,4 @@ global.ReadableStream = vi.fn().mockImplementation(() => ({
     read: vi.fn().mockResolvedValue({ done: true, value: undefined }),
     releaseLock: vi.fn(),
   }),
-})) as any;
+})) as unknown as typeof ReadableStream;
