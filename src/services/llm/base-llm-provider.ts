@@ -57,8 +57,6 @@ export abstract class BaseLLMProvider implements ILLMProvider {
    * Get available models from the provider API
    */
   public async getAvailableModels(apiKey: string, baseUrl?: string): Promise<AvailableModelsResult> {
-    // DEBUG: Log cache access method
-    console.log('[DEBUG] Accessing modelCache as static property');
     const cacheKey = `${this.name}_${apiKey.slice(-8)}_${baseUrl || 'default'}`;
     const cached = BaseLLMProvider.modelCache.get(cacheKey);
     
@@ -74,8 +72,7 @@ export abstract class BaseLLMProvider implements ILLMProvider {
     try {
       const models = await this.fetchAvailableModels(apiKey, baseUrl);
       
-      // Cache the result - DEBUG: This should be static access
-      console.log('[DEBUG] ERROR: Accessing modelCache as instance property - should be static');
+      // Cache the result
       BaseLLMProvider.modelCache.set(cacheKey, {
         models,
         timestamp: Date.now(),
@@ -121,8 +118,6 @@ export abstract class BaseLLMProvider implements ILLMProvider {
    * Clear model cache
    */
   public clearModelCache(): void {
-    // DEBUG: This should be static access
-    console.log('[DEBUG] ERROR: Accessing modelCache as instance property - should be static');
     BaseLLMProvider.modelCache.clear();
   }
 
