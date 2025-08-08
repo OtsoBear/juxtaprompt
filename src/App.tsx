@@ -14,6 +14,7 @@ import { urlStateManager } from '@/services/url-state';
 import { llmProviderManager } from '@/services/llm';
 import { openaiProvider, anthropicProvider, geminiProvider } from '@/services/llm/providers';
 import { PromptGrid } from '@/components/layout';
+import { ResponseComparison } from '@/components/response';
 import { SimpleThemeToggle } from '@/components/ui';
 // Lazy load settings panel since it's only shown when needed
 const LLMConfigurationPanel = React.lazy(() =>
@@ -69,6 +70,7 @@ const App: React.FC = () => {
 
   // Settings panel state
   const [showSettings, setShowSettings] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
   // Theme management
   const { theme, resolvedTheme, toggleTheme } = useTheme(
@@ -253,23 +255,25 @@ const App: React.FC = () => {
             // Update response in real-time
             setState(prev => {
               const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
-              const response: ResponseItem = {
-                id: `response-${prompt.id}`,
-                promptId: prompt.id,
-                response: {
-                  requestId: request.id,
-                  content: fullContent,
-                  isComplete: chunk.isComplete,
-                  isStreaming: !chunk.isComplete,
-                  metadata: {
-                    ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
-                    model: state.config!.model,
-                    provider: state.config!.provider,
-                    timestamp: Date.now(),
-                  },
-                },
-                createdAt: Date.now(),
-              };
+                  const nowTs = Date.now();
+                  const response: ResponseItem = {
+                    id: `response-${prompt.id}`,
+                    promptId: prompt.id,
+                    response: {
+                      requestId: request.id,
+                      content: fullContent,
+                      isComplete: chunk.isComplete,
+                      isStreaming: !chunk.isComplete,
+                      metadata: {
+                        ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
+                        model: state.config!.model,
+                        provider: state.config!.provider,
+                        timestamp: nowTs,
+                        ...(chunk.isComplete ? { duration: nowTs - request.timestamp } : {}),
+                      },
+                    },
+                    createdAt: request.timestamp,
+                  };
 
               if (existingIndex >= 0) {
                 const newResponses = [...prev.responses];
@@ -289,27 +293,29 @@ const App: React.FC = () => {
         console.error(`Error streaming response for prompt ${prompt.id}:`, error);
         
         // Add error response
-        const errorResponse: ResponseItem = {
-          id: `response-${prompt.id}`,
-          promptId: prompt.id,
-          response: {
-            requestId: request.id,
-            content: '',
-            isComplete: true,
-            isStreaming: false,
-            error: {
-              code: 'STREAMING_ERROR',
-              message: error instanceof Error ? error.message : 'Unknown streaming error',
-              retryable: true,
-            },
-            metadata: {
-              model: state.config!.model,
-              provider: state.config!.provider,
-              timestamp: Date.now(),
-            },
-          },
-          createdAt: Date.now(),
-        };
+            const nowTs = Date.now();
+            const errorResponse: ResponseItem = {
+              id: `response-${prompt.id}`,
+              promptId: prompt.id,
+              response: {
+                requestId: request.id,
+                content: '',
+                isComplete: true,
+                isStreaming: false,
+                error: {
+                  code: 'STREAMING_ERROR',
+                  message: error instanceof Error ? error.message : 'Unknown streaming error',
+                  retryable: true,
+                },
+                metadata: {
+                  model: state.config!.model,
+                  provider: state.config!.provider,
+                  timestamp: nowTs,
+                  duration: nowTs - request.timestamp,
+                },
+              },
+              createdAt: request.timestamp,
+            };
 
         setState(prev => {
           const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
@@ -371,6 +377,7 @@ const App: React.FC = () => {
                 // Update response in real-time
                 setState(prev => {
                   const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
+                  const nowTs = Date.now();
                   const response: ResponseItem = {
                     id: `response-${prompt.id}`,
                     promptId: prompt.id,
@@ -383,10 +390,11 @@ const App: React.FC = () => {
                         ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
                         model: state.config!.model,
                         provider: state.config!.provider,
-                        timestamp: Date.now(),
+                        timestamp: nowTs,
+                        ...(chunk.isComplete ? { duration: nowTs - request.timestamp } : {}),
                       },
                     },
-                    createdAt: Date.now(),
+                    createdAt: request.timestamp,
                   };
 
                   if (existingIndex >= 0) {
@@ -407,6 +415,7 @@ const App: React.FC = () => {
             console.error(`Error streaming response for prompt ${prompt.id}:`, error);
             
             // Add error response
+            const nowTs = Date.now();
             const errorResponse: ResponseItem = {
               id: `response-${prompt.id}`,
               promptId: prompt.id,
@@ -423,10 +432,11 @@ const App: React.FC = () => {
                 metadata: {
                   model: state.config!.model,
                   provider: state.config!.provider,
-                  timestamp: Date.now(),
+                  timestamp: nowTs,
+                  duration: nowTs - request.timestamp,
                 },
               },
-              createdAt: Date.now(),
+              createdAt: request.timestamp,
             };
 
             setState(prev => {
@@ -480,13 +490,35 @@ const App: React.FC = () => {
     setError,
   ]);
 
+  // Average latency across completed responses
+  const avgLatencyMs = useMemo(() => {
+    const completed = state.responses.filter(r => r.response.metadata.duration !== undefined);
+    if (completed.length === 0) return null;
+    const sum = completed.reduce((acc, r) => acc + (r.response.metadata.duration || 0), 0);
+    return Math.round(sum / completed.length);
+  }, [state.responses]);
+
+  // Global keyboard shortcut: Ctrl+Enter -> Send All
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (!contextValue.isLoading && contextValue.config && contextValue.prompts.some(p => p.content.trim().length > 0)) {
+          void sendPrompts();
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [contextValue.isLoading, contextValue.config, contextValue.prompts, sendPrompts]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="w-full px-2 py-2">
         <header className="mb-2">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center space-x-4">
-              <h1 className="text-4xl font-bold">
+              <h1 className="text-3xl font-bold">
                 Juxtaprompt
               </h1>
             </div>
@@ -500,16 +532,42 @@ const App: React.FC = () => {
                 onClick={() => setShowSettings(true)}
                 variant="ghost"
                 size="icon"
-                title="Open settings"
-                aria-label="Open settings"
+                title="open settings"
+                aria-label="open settings"
               >
                 <Settings className="h-4 w-4" />
               </Button>
             </div>
           </div>
           <p className="text-muted-foreground text-center text-sm">
-            Professional prompt comparison tool with real-time streaming responses
+            professional prompt comparison tool with real-time streaming responses
           </p>
+
+          {/* Subheader bar */}
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground border-b pb-2">
+            <div className="flex items-center space-x-2">
+              {contextValue.config ? (
+                <>
+                  <Badge variant="secondary" className="text-xs">
+                    {contextValue.config.provider} • {contextValue.config.model}
+                  </Badge>
+                  {avgLatencyMs !== null && (
+                    <span>avg latency: {avgLatencyMs}ms</span>
+                  )}
+                </>
+              ) : (
+                <span>no provider configured</span>
+              )}
+            </div>
+            <Button
+              onClick={() => setShowSettings(true)}
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2"
+            >
+              open settings
+            </Button>
+          </div>
         </header>
 
         <main>
@@ -521,10 +579,13 @@ const App: React.FC = () => {
                 <h3 className="font-medium mb-1">
                   Configuration Required
                 </h3>
-                <p className="text-sm">
+                <p className="text-sm mb-2">
                   Please configure an LLM provider to start comparing prompts.
                   Add your API key in the settings panel.
                 </p>
+                <Button onClick={() => setShowSettings(true)}>
+                  open settings
+                </Button>
               </AlertDescription>
             </Alert>
           )}
@@ -566,18 +627,40 @@ const App: React.FC = () => {
 
               <div className="flex items-center space-x-2">
                 {promptsWithContent.length > 0 && contextValue.config && (
-                  <Button
-                    onClick={sendPrompts}
-                    disabled={contextValue.isLoading}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    {contextValue.isLoading ? 'Sending...' : 'Send All Prompts'}
-                  </Button>
+                  <>
+                    <Button
+                      onClick={sendPrompts}
+                      disabled={contextValue.isLoading}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {contextValue.isLoading ? 'Sending...' : 'Send All Prompts'}
+                    </Button>
+                    <Button
+                      onClick={() => llmProviderManager.cancelAllRequests()}
+                      disabled={!contextValue.isLoading}
+                      variant="outline"
+                    >
+                      stop all
+                    </Button>
+                  </>
                 )}
                 
+                {contextValue.ui.comparePinnedIds?.length >= 2 && (
+                  <Button
+                    onClick={() => setShowCompare(true)}
+                    variant="secondary"
+                  >
+                    open compare ({contextValue.ui.comparePinnedIds.length})
+                  </Button>
+                )}
+
                 {contextValue.responses.length > 0 && (
                   <Button
-                    onClick={clearResponses}
+                    onClick={() => {
+                      if (window.confirm('clear all responses?')) {
+                        clearResponses();
+                      }
+                    }}
                     disabled={contextValue.isLoading}
                     variant="secondary"
                   >
@@ -586,6 +669,24 @@ const App: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Empty prompts state */}
+            {contextValue.prompts.length === 0 ? (
+              <div className="border rounded-md p-4 text-sm text-muted-foreground">
+                <div className="mb-2">no prompts yet. choose a template to get started:</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => addPrompt('Answer the question: Why is the sky blue?','QA')}>
+                    QA
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => addPrompt('Summarize the following text in 3 bullet points:\n\n','Summarize')}>
+                    summarize
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => addPrompt('Translate the following to Finnish:\n\n','Translate')}>
+                    translate
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {/* Prompt Grid */}
             <PromptGrid
@@ -598,6 +699,7 @@ const App: React.FC = () => {
               isLoading={contextValue.isLoading}
               config={contextValue.config}
               uiState={contextValue.ui}
+              onUIStateChange={updateUIState}
             />
           </div>
         </main>
@@ -631,10 +733,26 @@ const App: React.FC = () => {
                   <LLMConfigurationPanel
                     config={contextValue.config}
                     onConfigChange={setConfig}
+                    uiState={contextValue.ui}
+                    onUIStateChange={updateUIState}
                   />
                 </React.Suspense>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+        {/* Compare Modal */}
+        <Dialog open={showCompare} onOpenChange={setShowCompare}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>compare responses</DialogTitle>
+              <DialogDescription>
+                side-by-side comparison of pinned responses
+              </DialogDescription>
+            </DialogHeader>
+            <ResponseComparison
+              responses={contextValue.responses.filter(r => contextValue.ui.comparePinnedIds?.includes(r.promptId))}
+            />
           </DialogContent>
         </Dialog>
       </div>

@@ -140,7 +140,8 @@ export class URLStateManager implements IURLStateManager {
     try {
       const validation = validateURLState(state);
       if (validation.success) {
-        return validation.data;
+        // Normalize validated data into our strong URLState shape
+        return this.mergeWithDefaults(validation.data as Partial<URLState>);
       } else {
         console.warn('Invalid URL state format:', validation.error);
         return null;
@@ -194,13 +195,22 @@ export class URLStateManager implements IURLStateManager {
     
     // Only include non-default UI values
     const ui: Record<string, unknown> = {};
-    if (state.ui.gridColumns !== undefined && state.ui.gridColumns !== 2) {
+    if (state.ui.gridColumns !== undefined && state.ui.gridColumns !== 4) {
       ui['gridColumns'] = state.ui.gridColumns;
+    }
+    if (state.ui.gridRows !== undefined && state.ui.gridRows !== 2) {
+      ui['gridRows'] = state.ui.gridRows;
+    }
+    if (state.ui.fontSize !== undefined && state.ui.fontSize !== 12) {
+      ui['fontSize'] = state.ui.fontSize;
+    }
+    if (state.ui.maxHeight !== undefined && state.ui.maxHeight !== 6) {
+      ui['maxHeight'] = state.ui.maxHeight;
     }
     if (state.ui.autoSend !== undefined && state.ui.autoSend !== false) {
       ui['autoSend'] = state.ui.autoSend;
     }
-    if (state.ui.debounceMs !== undefined && state.ui.debounceMs !== 500) {
+    if (state.ui.debounceMs !== undefined && state.ui.debounceMs !== 1000) {
       ui['debounceMs'] = state.ui.debounceMs;
     }
     if (state.ui.showAdvancedSettings !== undefined && state.ui.showAdvancedSettings !== false) {
@@ -208,6 +218,22 @@ export class URLStateManager implements IURLStateManager {
     }
     if (state.ui.theme !== undefined && state.ui.theme !== 'system') {
       ui['theme'] = state.ui.theme;
+    }
+    if (Array.isArray(state.ui.comparePinnedIds) && state.ui.comparePinnedIds.length > 0) {
+      ui['comparePinnedIds'] = state.ui.comparePinnedIds;
+    }
+    if (state.ui.customBaseUrl === true) {
+      ui['customBaseUrl'] = true;
+    }
+    if (state.ui.favorites) {
+      // Only include if any provider has favorites
+      const hasAnyFavorites =
+        (state.ui.favorites.openai?.length ?? 0) > 0 ||
+        (state.ui.favorites.anthropic?.length ?? 0) > 0 ||
+        (state.ui.favorites.gemini?.length ?? 0) > 0;
+      if (hasAnyFavorites) {
+        ui['favorites'] = state.ui.favorites;
+      }
     }
     
     if (Object.keys(ui).length > 0) {
@@ -235,10 +261,25 @@ export class URLStateManager implements IURLStateManager {
       },
       ui: {
         ...(partial.ui?.gridColumns !== undefined && { gridColumns: partial.ui.gridColumns }),
+        ...(partial.ui?.gridRows !== undefined && { gridRows: partial.ui.gridRows }),
+        ...(partial.ui?.fontSize !== undefined && { fontSize: partial.ui.fontSize }),
+        ...(partial.ui?.maxHeight !== undefined && { maxHeight: partial.ui.maxHeight }),
         ...(partial.ui?.autoSend !== undefined && { autoSend: partial.ui.autoSend }),
         ...(partial.ui?.debounceMs !== undefined && { debounceMs: partial.ui.debounceMs }),
         ...(partial.ui?.showAdvancedSettings !== undefined && { showAdvancedSettings: partial.ui.showAdvancedSettings }),
         ...(partial.ui?.theme && { theme: partial.ui.theme }),
+        ...(partial.ui?.comparePinnedIds && { comparePinnedIds: partial.ui.comparePinnedIds }),
+        ...(partial.ui?.customBaseUrl !== undefined && { customBaseUrl: partial.ui.customBaseUrl }),
+        ...(partial.ui?.favorites && (() => {
+          const favs = partial.ui!.favorites as unknown as Readonly<Record<"openai" | "anthropic" | "gemini", ReadonlyArray<string>>>;
+          return {
+            favorites: {
+              openai: (favs?.openai ? [...favs.openai] : []) as ReadonlyArray<string>,
+              anthropic: (favs?.anthropic ? [...favs.anthropic] : []) as ReadonlyArray<string>,
+              gemini: (favs?.gemini ? [...favs.gemini] : []) as ReadonlyArray<string>,
+            } as Readonly<Record<"openai" | "anthropic" | "gemini", ReadonlyArray<string>>>,
+          };
+        })()),
       },
     };
   }

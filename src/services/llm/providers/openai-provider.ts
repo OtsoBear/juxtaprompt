@@ -66,16 +66,30 @@ export class OpenAIProvider extends BaseLLMProvider {
       content: request.prompt,
     });
 
-    return {
+    // Determine if this is a chat model or completion model
+    const isChatModel = request.config.model.includes('chat') ||
+                       request.config.model.includes('gpt-4') ||
+                       request.config.model.includes('gpt-3.5') ||
+                       request.config.model.endsWith('-chat');
+
+    const body: Record<string, unknown> = {
       model: request.config.model,
       messages,
       temperature: request.config.temperature,
-      max_tokens: request.config.maxTokens,
       top_p: request.config.topP,
       frequency_penalty: request.config.frequencyPenalty,
       presence_penalty: request.config.presencePenalty,
       stream: true,
     };
+
+    // Use appropriate token parameter based on model type
+    if (isChatModel) {
+      body['max_tokens'] = request.config.maxTokens;
+    } else {
+      body['max_completion_tokens'] = request.config.maxTokens;
+    }
+
+    return body;
   }
 
   /**
@@ -306,6 +320,14 @@ export class OpenAIProvider extends BaseLLMProvider {
   protected getFallbackModels(): ModelInfo[] {
     return [
       {
+        id: 'gpt-5-chat',
+        name: 'GPT-5 Chat',
+        description: 'Next generation chat model',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 10.0, output: 30.0 },
+      },
+      {
         id: 'gpt-5',
         name: 'GPT-5',
         description: 'Next generation flagship model',
@@ -361,6 +383,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelDescription(modelId: string): string {
     const descriptions: Record<string, string> = {
+      'gpt-5-chat': 'Next generation chat model',
       'gpt-5': 'Next generation flagship model',
       'gpt-4o': 'Most advanced multimodal model',
       'gpt-4o-mini': 'Affordable and intelligent small model',
@@ -376,6 +399,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelContextLength(modelId: string): number {
     const contextLengths: Record<string, number> = {
+      'gpt-5-chat': 200000,
       'gpt-5': 200000,
       'gpt-4o': 128000,
       'gpt-4o-mini': 128000,
@@ -391,6 +415,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelMaxOutputTokens(modelId: string): number {
     const maxOutputTokens: Record<string, number> = {
+      'gpt-5-chat': 8192,
       'gpt-5': 8192,
       'gpt-4o': 4096,
       'gpt-4o-mini': 16384,
@@ -406,6 +431,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelPricing(modelId: string): { input: number; output: number } {
     const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-5-chat': { input: 10.0, output: 30.0 },
       'gpt-5': { input: 10.0, output: 30.0 },
       'gpt-4o': { input: 5.0, output: 15.0 },
       'gpt-4o-mini': { input: 0.15, output: 0.6 },

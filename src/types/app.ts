@@ -75,13 +75,14 @@ export interface BaseComponentProps {
 export interface PromptGridProps extends BaseComponentProps {
   readonly prompts: ReadonlyArray<PromptItem>;
   readonly responses: ReadonlyArray<ResponseItem>;
-  readonly onPromptChange: (id: string, content: string) => void;
+  readonly onPromptChange: (id: string, content: string, title?: string) => void;
   readonly onPromptRemove: (id: string) => void;
   readonly onPromptAdd: (content?: string, title?: string) => void;
   readonly onSendSinglePrompt?: (id: string) => void;
   readonly isLoading: boolean;
   readonly config?: LLMConfig | null;
   readonly uiState?: UIState;
+  readonly onUIStateChange: (updates: Partial<UIState>) => void;
 }
 
 export interface SettingsPanelProps extends BaseComponentProps {

@@ -127,11 +127,17 @@ export const URLStateSchema = z.object({
     systemMessage: z.string().optional(),
   }),
   ui: z.object({
-    gridColumns: z.number().min(1).max(6).optional(),
+    gridColumns: z.number().min(1).max(20).optional(),
+    gridRows: z.number().min(1).max(10).optional(),
+    fontSize: z.number().min(8).max(16).optional(),
+    maxHeight: z.number().min(2).max(20).optional(),
     autoSend: z.boolean().optional(),
     debounceMs: z.number().min(0).max(5000).optional(),
     showAdvancedSettings: z.boolean().optional(),
     theme: z.enum(['light', 'dark', 'system']).optional(),
+    comparePinnedIds: z.array(z.string()).optional(),
+    customBaseUrl: z.boolean().optional(),
+    favorites: z.record(z.enum(['openai','anthropic','gemini']), z.array(z.string())).optional(),
   }),
 });
 

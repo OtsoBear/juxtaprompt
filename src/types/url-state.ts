@@ -1,11 +1,18 @@
+import type { LLMProvider } from './llm';
 // src/types/url-state.ts
 
 export interface UIState {
   readonly gridColumns: number;
+  readonly gridRows: number;
+  readonly fontSize: number;
+  readonly maxHeight: number;
   readonly autoSend: boolean;
   readonly debounceMs: number;
   readonly showAdvancedSettings: boolean;
   readonly theme: 'light' | 'dark' | 'system';
+  readonly comparePinnedIds: ReadonlyArray<string>;
+  readonly customBaseUrl: boolean;
+  readonly favorites: Readonly<Record<LLMProvider, ReadonlyArray<string>>>;
 }
 
 export interface URLState {
@@ -22,10 +29,16 @@ export interface URLState {
   };
   readonly ui: {
     readonly gridColumns?: number | undefined;
+    readonly gridRows?: number | undefined;
+    readonly fontSize?: number | undefined;
+    readonly maxHeight?: number | undefined;
     readonly autoSend?: boolean | undefined;
     readonly debounceMs?: number | undefined;
     readonly showAdvancedSettings?: boolean | undefined;
     readonly theme?: 'light' | 'dark' | 'system' | undefined;
+    readonly comparePinnedIds?: ReadonlyArray<string> | undefined;
+    readonly customBaseUrl?: boolean | undefined;
+    readonly favorites?: Readonly<Record<LLMProvider, ReadonlyArray<string>>> | undefined;
   };
 }
 
@@ -43,13 +56,23 @@ export interface URLStateManager extends URLStateService {
   validateState(state: unknown): URLState | null;
 }
 
-// Default UI state
+ // Default UI state
 export const DEFAULT_UI_STATE: UIState = {
-  gridColumns: 2,
+  gridColumns: 4,
+  gridRows: 2,
+  fontSize: 12,
+  maxHeight: 6,
   autoSend: false,
-  debounceMs: 500,
+  debounceMs: 1000,
   showAdvancedSettings: false,
   theme: 'system',
+  comparePinnedIds: [],
+  customBaseUrl: false,
+  favorites: {
+    openai: [],
+    anthropic: [],
+    gemini: [],
+  },
 } as const;
 
 // URL state compression settings

@@ -1,7 +1,8 @@
 // src/components/settings/LLMConfigurationPanel.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Eye, EyeOff, AlertCircle, CheckCircle, Loader2, RefreshCw, Save } from 'lucide-react';
+import { Settings, Eye, EyeOff, AlertCircle, CheckCircle, Loader2, RefreshCw, Save, Star } from 'lucide-react';
 import type { LLMConfig, LLMProvider, ModelInfo, AvailableModelsResult } from '@/types/llm';
+import type { UIState } from '@/types/url-state';
 import { DEFAULT_PROVIDER_CONFIGS, PROVIDER_MODELS } from '@/types/llm';
 import { StorageSecuritySelector } from './StorageSecuritySelector';
 import { storageService } from '@/services/storage';
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Optimized debounce utility with immediate execution option
 const debounce = <T extends (...args: unknown[]) => unknown>(
@@ -35,6 +37,8 @@ const debounce = <T extends (...args: unknown[]) => unknown>(
 interface LLMConfigurationPanelProps {
   config: LLMConfig | null;
   onConfigChange: (config: LLMConfig) => void;
+  uiState: UIState;
+  onUIStateChange: (updates: Partial<UIState>) => void;
   className?: string;
 }
 
@@ -44,6 +48,8 @@ interface LLMConfigurationPanelProps {
 export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React.memo(({
   config,
   onConfigChange,
+  uiState,
+  onUIStateChange,
   className = '',
 }) => {
   const [showApiKey, setShowApiKey] = useState(false);
@@ -67,6 +73,11 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
     anthropic: null,
     gemini: null,
   });
+  const [modelSearch, setModelSearch] = useState('');
+
+  // narrow provider usage for typing in render
+  const providerKey = (config?.provider ?? (typeof window !== 'undefined' ? (localStorage.getItem('last_provider') as LLMProvider | null) : null) ?? 'openai') as LLMProvider;
+  const providerFavorites = uiState.favorites?.[providerKey] ?? [];
 
   // Form state
   const [formData, setFormData] = useState<Partial<LLMConfig>>(() => {
@@ -86,6 +97,13 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
     
     return DEFAULT_PROVIDER_CONFIGS.openai;
   });
+
+  // Persist last selected provider for providerKey fallback
+  useEffect(() => {
+    if (formData.provider) {
+      try { localStorage.setItem('last_provider', formData.provider); } catch {}
+    }
+  }, [formData.provider]);
 
   // Update storage preference when it changes
   useEffect(() => {
@@ -417,70 +435,143 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
                 <Button
                   type="button"
                   onClick={refreshModels}
-                  disabled={modelsLoading[formData.provider]}
+                  disabled={modelsLoading[providerKey]}
                   variant="ghost"
                   size="sm"
                   className="h-6 px-2"
                 >
-                  <RefreshCw className={`h-3 w-3 ${modelsLoading[formData.provider] ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-3 w-3 ${modelsLoading[providerKey] ? 'animate-spin' : ''}`} />
                   <span className="ml-1 text-xs">Refresh</span>
                 </Button>
               )}
             </div>
+
+            <Input
+              value={modelSearch}
+              onChange={(e) => setModelSearch(e.target.value)}
+              placeholder="search models"
+            />
             
             <Select
               value={formData.model || ''}
               onValueChange={(value) => handleFieldChange('model', value)}
-              disabled={modelsLoading[formData.provider]}
+              disabled={modelsLoading[providerKey]}
             >
               <SelectTrigger>
                 <SelectValue placeholder={
-                  modelsLoading[formData.provider]
+                  modelsLoading[providerKey]
                     ? "Loading models..."
-                    : availableModels[formData.provider].length > 0
+                    : availableModels[providerKey].length > 0
                       ? "Select a model"
                       : "Enter API key to load models"
                 } />
               </SelectTrigger>
               <SelectContent>
-                {availableModels[formData.provider].length > 0 ? (
-                  availableModels[formData.provider].map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col py-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{model.name}</span>
-                          {model.pricing && (
-                            <span className="text-xs text-muted-foreground ml-2">
-                              ${model.pricing.input}/${model.pricing.output}
+                {availableModels[providerKey].length > 0 ? (
+                  availableModels[providerKey]
+                    .filter((m) =>
+                      (m.name || '').toLowerCase().includes(modelSearch.toLowerCase()) ||
+                      (m.id || '').toLowerCase().includes(modelSearch.toLowerCase())
+                    )
+                    .sort((a, b) => {
+                      const favs = new Set(providerFavorites);
+                      const af = favs.has(a.id) ? 0 : 1;
+                      const bf = favs.has(b.id) ? 0 : 1;
+                      return af - bf;
+                    })
+                    .map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex flex-col py-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{model.name}</span>
+                            <div className="flex items-center">
+                              {model.pricing && (
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  ${model.pricing.input}/${model.pricing.output}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className="ml-2"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const provider = providerKey;
+                                  const current = uiState.favorites || { openai: [], anthropic: [], gemini: [] };
+                                  const set = new Set(current[provider]);
+                                  if (set.has(model.id)) set.delete(model.id); else set.add(model.id);
+                                  onUIStateChange({
+                                    favorites: {
+                                      ...current,
+                                      [provider]: Array.from(set),
+                                    } as UIState['favorites'],
+                                  });
+                                }}
+                                title="toggle favorite"
+                                aria-label="toggle favorite"
+                              >
+                                <Star className={`h-3 w-3 ${providerFavorites.includes(model.id) ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground'}`} />
+                              </button>
+                            </div>
+                          </div>
+                          {model.description && (
+                            <span className="text-xs text-muted-foreground truncate">
+                              {model.description}
                             </span>
                           )}
                         </div>
-                        {model.description && (
-                          <span className="text-xs text-muted-foreground truncate">
-                            {model.description}
-                          </span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))
+                      </SelectItem>
+                    ))
                 ) : (
-                  PROVIDER_MODELS[formData.provider].map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
-                  ))
+                  PROVIDER_MODELS[providerKey]
+                    .filter((id) => id.toLowerCase().includes(modelSearch.toLowerCase()))
+                    .sort((a, b) => {
+                      const favs = new Set(providerFavorites);
+                      const af = favs.has(a) ? 0 : 1;
+                      const bf = favs.has(b) ? 0 : 1;
+                      return af - bf;
+                    })
+                    .map((id) => (
+                      <SelectItem key={id} value={id}>
+                        <div className="flex items-center justify-between">
+                          <span>{id}</span>
+                          <button
+                            type="button"
+                            className="ml-2"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const provider = providerKey;
+                              const current = uiState.favorites || { openai: [], anthropic: [], gemini: [] };
+                              const set = new Set(current[provider]);
+                              if (set.has(id)) set.delete(id); else set.add(id);
+                              onUIStateChange({
+                                favorites: {
+                                  ...current,
+                                  [provider]: Array.from(set),
+                                } as UIState['favorites'],
+                              });
+                            }}
+                            title="toggle favorite"
+                            aria-label="toggle favorite"
+                          >
+                            <Star className={`h-3 w-3 ${providerFavorites.includes(id) ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground'}`} />
+                          </button>
+                        </div>
+                      </SelectItem>
+                    ))
                 )}
               </SelectContent>
             </Select>
             
-            {modelsError[formData.provider] && (
+            {modelsError[providerKey] && (
               <p className="text-sm text-destructive flex items-center">
                 <AlertCircle className="h-3 w-3 mr-1" />
-                {modelsError[formData.provider]}
+                {modelsError[providerKey]}
               </p>
             )}
             
-            {modelsLoading[formData.provider] && (
+            {modelsLoading[providerKey] && (
               <p className="text-sm text-muted-foreground flex items-center">
                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                 Loading available models...
@@ -491,13 +582,31 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
 
         {/* Base URL */}
         <div className="space-y-2">
-          <Label>Base URL</Label>
-          <Input
-            type="url"
-            value={formData.baseUrl || ''}
-            onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
-            placeholder="API base URL"
-          />
+          <div className="flex items-center justify-between">
+            <Label>Base URL</Label>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                checked={!!uiState.customBaseUrl}
+                onCheckedChange={(checked) => {
+                  const enabled = !!checked;
+                  onUIStateChange({ customBaseUrl: enabled });
+                  if (!enabled && formData.provider) {
+                    const def = DEFAULT_PROVIDER_CONFIGS[formData.provider].baseUrl;
+                    setFormData(prev => ({ ...prev, baseUrl: def }));
+                  }
+                }}
+              />
+              <span className="text-xs text-muted-foreground">custom base url</span>
+            </div>
+          </div>
+          {uiState.customBaseUrl && (
+            <Input
+              type="url"
+              value={formData.baseUrl || ''}
+              onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
+              placeholder="API base URL"
+            />
+          )}
         </div>
       </div>
 
@@ -604,6 +713,21 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
             variant="outline"
           >
             Validate
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              if (window.confirm('clear all api keys?')) {
+                storageService.clearAllAPIKeys();
+                setFormData(prev => ({ ...prev, apiKey: '' }));
+                setAvailableModels({ openai: [], anthropic: [], gemini: [] });
+                setValidationStatus('idle');
+                setValidationError(null);
+              }
+            }}
+            variant="outline"
+          >
+            clear all api keys
           </Button>
         </div>
       </div>
