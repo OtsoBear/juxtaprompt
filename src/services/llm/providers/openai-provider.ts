@@ -306,6 +306,14 @@ export class OpenAIProvider extends BaseLLMProvider {
   protected getFallbackModels(): ModelInfo[] {
     return [
       {
+        id: 'gpt-5',
+        name: 'GPT-5',
+        description: 'Next generation flagship model',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 10.0, output: 30.0 },
+      },
+      {
         id: 'gpt-4o',
         name: 'GPT-4o',
         description: 'Most advanced multimodal model',
@@ -353,6 +361,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelDescription(modelId: string): string {
     const descriptions: Record<string, string> = {
+      'gpt-5': 'Next generation flagship model',
       'gpt-4o': 'Most advanced multimodal model',
       'gpt-4o-mini': 'Affordable and intelligent small model',
       'gpt-4-turbo': 'Previous generation flagship model',
@@ -367,6 +376,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelContextLength(modelId: string): number {
     const contextLengths: Record<string, number> = {
+      'gpt-5': 200000,
       'gpt-4o': 128000,
       'gpt-4o-mini': 128000,
       'gpt-4-turbo': 128000,
@@ -381,6 +391,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelMaxOutputTokens(modelId: string): number {
     const maxOutputTokens: Record<string, number> = {
+      'gpt-5': 8192,
       'gpt-4o': 4096,
       'gpt-4o-mini': 16384,
       'gpt-4-turbo': 4096,
@@ -395,6 +406,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelPricing(modelId: string): { input: number; output: number } {
     const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-5': { input: 10.0, output: 30.0 },
       'gpt-4o': { input: 5.0, output: 15.0 },
       'gpt-4o-mini': { input: 0.15, output: 0.6 },
       'gpt-4-turbo': { input: 10.0, output: 30.0 },
@@ -438,24 +450,8 @@ export class OpenAIProvider extends BaseLLMProvider {
       };
     }
 
-    // Validate model is supported
-    const supportedModels = [
-      'gpt-4o',
-      'gpt-4o-mini',
-      'gpt-4-turbo',
-      'gpt-4',
-      'gpt-3.5-turbo',
-    ];
-    
-    if (!supportedModels.includes(validatedConfig.model)) {
-      return {
-        success: false,
-        error: {
-          code: 'UNSUPPORTED_MODEL',
-          message: `Model "${validatedConfig.model}" is not supported. Supported models: ${supportedModels.join(', ')}`,
-        },
-      };
-    }
+    // Allow any model - let OpenAI API handle validation
+    // This enables support for new models like gpt-5 without code changes
 
     // Validate base URL
     const validBaseUrls = [

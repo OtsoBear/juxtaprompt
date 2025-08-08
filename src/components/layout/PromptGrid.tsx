@@ -121,6 +121,14 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
     setFontSize(value[0]);
   }, []);
 
+  // Calculate line height based on font size for better text density
+  const getLineHeight = useCallback((fontSize: number) => {
+    // Use a ratio that provides good readability while maintaining density
+    // Smaller fonts get slightly more line spacing, larger fonts get tighter spacing
+    const ratio = fontSize <= 10 ? 1.2 : fontSize <= 12 ? 1.15 : 1.1;
+    return fontSize * ratio;
+  }, []);
+
   const handleMaxHeightChange = useCallback((value: number[]) => {
     setMaxHeight(value[0]);
   }, []);
@@ -307,6 +315,7 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
                     className="resize-none p-1"
                     style={{
                       fontSize: `${fontSize}px`,
+                      lineHeight: `${getLineHeight(fontSize)}px`,
                       ...(isExpanded ? { height: '8rem' } : getTextareaHeight(prompt.content))
                     }}
                   />
@@ -335,19 +344,19 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
                       }
                     >
                       {hasError ? (
-                        <div className="text-destructive" style={{ fontSize: `${fontSize}px` }}>
+                        <div className="text-destructive" style={{ fontSize: `${fontSize}px`, lineHeight: `${getLineHeight(fontSize)}px` }}>
                           <div className="font-medium">Error</div>
                           <div>{response.response.error?.message || 'Unknown error occurred'}</div>
                         </div>
                       ) : response.response.content ? (
-                        <div className="whitespace-pre-wrap" style={{ fontSize: `${fontSize}px` }}>
+                        <div className="whitespace-pre-wrap" style={{ fontSize: `${fontSize}px`, lineHeight: `${getLineHeight(fontSize)}px` }}>
                           {response.response.content}
                           {isStreaming && (
                             <span className="inline-block w-1 h-2 bg-primary animate-pulse ml-1" />
                           )}
                         </div>
                       ) : (
-                        <div className="text-muted-foreground italic" style={{ fontSize: `${fontSize}px` }}>
+                        <div className="text-muted-foreground italic" style={{ fontSize: `${fontSize}px`, lineHeight: `${getLineHeight(fontSize)}px` }}>
                           {isStreaming ? 'Waiting...' : 'No response'}
                         </div>
                       )}
@@ -360,7 +369,7 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
                   <div className="prompt-loading-container">
                     <div className="flex items-center space-x-1 text-muted-foreground">
                       <div className="w-1 h-1 border border-primary border-t-transparent rounded-full animate-spin"></div>
-                      <span style={{ fontSize: `${fontSize}px` }}>•••</span>
+                      <span style={{ fontSize: `${fontSize}px`, lineHeight: `${getLineHeight(fontSize)}px` }}>•••</span>
                     </div>
                   </div>
                 )}
