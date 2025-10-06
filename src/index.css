@@ -168,3 +168,61 @@
     grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
   }
 }
+
+/* Fast tooltip styles - instant appearance on hover */
+[title] {
+  position: relative;
+}
+
+/* Create instant tooltips using ::before and ::after pseudo-elements */
+[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.5rem;
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  margin-bottom: 0.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: tooltip-appear 0.1s ease-out;
+}
+
+/* Tooltip arrow */
+[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: hsl(var(--border));
+  z-index: 1000;
+  pointer-events: none;
+  margin-bottom: 1px;
+  animation: tooltip-appear 0.1s ease-out;
+}
+
+@keyframes tooltip-appear {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Hide native browser tooltip to prevent double tooltips */
+[title] {
+  /* This prevents the native tooltip from showing */
+  pointer-events: auto;
+}
