@@ -274,24 +274,91 @@ export class AnthropicProvider extends BaseLLMProvider {
 
   /**
    * Fetch available models from Anthropic API
-   * Note: Anthropic doesn't provide a public models endpoint, so we return static models
+   * Anthropic doesn't provide a public models endpoint, so we validate the API key
+   * and return the static list of active models
    */
-  protected async fetchAvailableModels(): Promise<ModelInfo[]> {
-    // Anthropic doesn't have a public models API endpoint
-    // We could potentially make a test request to validate the API key
-    // but for now, we'll return the static models
-    return this.getFallbackModels();
+  protected async fetchAvailableModels(apiKey: string, baseUrl?: string): Promise<ModelInfo[]> {
+    // Validate API key by making a minimal test request
+    const url = `${baseUrl || 'https://api.anthropic.com'}/v1/messages`;
+    const headers = this.createHeaders(apiKey, {
+      'anthropic-version': '2023-06-01',
+    });
+    
+    // Make a minimal request to validate the API key
+    const testBody = {
+      model: 'claude-3-haiku-20240307',
+      messages: [{ role: 'user', content: 'test' }],
+      max_tokens: 1,
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(testBody),
+      });
+
+      // If we get a 401, the API key is invalid
+      if (response.status === 401) {
+        throw new Error('Invalid API key');
+      }
+
+      // For any other response (including success), return the static models
+      // The API key is valid if we didn't get a 401
+      return this.getFallbackModels();
+    } catch (error) {
+      // If the error is about invalid API key, throw it
+      if (error instanceof Error && error.message === 'Invalid API key') {
+        throw error;
+      }
+      // For other errors (network issues, etc.), still return fallback models
+      console.warn('Failed to validate Anthropic API key, using fallback models:', error);
+      return this.getFallbackModels();
+    }
   }
 
   /**
    * Get fallback models when API call fails
+   * Only includes active models as of the latest status update
    */
   protected getFallbackModels(): ModelInfo[] {
     return [
       {
-        id: 'claude-3-5-sonnet-20241022',
-        name: 'Claude 3.5 Sonnet',
-        description: 'Most intelligent model, ideal for complex tasks',
+        id: 'claude-sonnet-4-5-20250929',
+        name: 'Claude Sonnet 4.5',
+        description: 'Latest and most advanced Sonnet model',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 3.0, output: 15.0 },
+      },
+      {
+        id: 'claude-opus-4-1-20250805',
+        name: 'Claude Opus 4.1',
+        description: 'Most powerful Opus model for complex tasks',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 15.0, output: 75.0 },
+      },
+      {
+        id: 'claude-opus-4-20250514',
+        name: 'Claude Opus 4',
+        description: 'Advanced Opus model for highly complex tasks',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 15.0, output: 75.0 },
+      },
+      {
+        id: 'claude-sonnet-4-20250514',
+        name: 'Claude Sonnet 4',
+        description: 'Balanced Sonnet model for general tasks',
+        contextLength: 200000,
+        maxOutputTokens: 8192,
+        pricing: { input: 3.0, output: 15.0 },
+      },
+      {
+        id: 'claude-3-7-sonnet-20250219',
+        name: 'Claude 3.7 Sonnet',
+        description: 'Enhanced Sonnet model with improved capabilities',
         contextLength: 200000,
         maxOutputTokens: 8192,
         pricing: { input: 3.0, output: 15.0 },
@@ -303,22 +370,6 @@ export class AnthropicProvider extends BaseLLMProvider {
         contextLength: 200000,
         maxOutputTokens: 8192,
         pricing: { input: 0.8, output: 4.0 },
-      },
-      {
-        id: 'claude-3-opus-20240229',
-        name: 'Claude 3 Opus',
-        description: 'Powerful model for highly complex tasks',
-        contextLength: 200000,
-        maxOutputTokens: 4096,
-        pricing: { input: 15.0, output: 75.0 },
-      },
-      {
-        id: 'claude-3-sonnet-20240229',
-        name: 'Claude 3 Sonnet',
-        description: 'Balance of intelligence and speed',
-        contextLength: 200000,
-        maxOutputTokens: 4096,
-        pricing: { input: 3.0, output: 15.0 },
       },
       {
         id: 'claude-3-haiku-20240307',
@@ -365,12 +416,14 @@ export class AnthropicProvider extends BaseLLMProvider {
       };
     }
 
-    // Validate model is supported
+    // Validate model is supported (only active models)
     const supportedModels = [
-      'claude-3-5-sonnet-20241022',
+      'claude-sonnet-4-5-20250929',
+      'claude-opus-4-1-20250805',
+      'claude-opus-4-20250514',
+      'claude-sonnet-4-20250514',
+      'claude-3-7-sonnet-20250219',
       'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
       'claude-3-haiku-20240307',
     ];
     
