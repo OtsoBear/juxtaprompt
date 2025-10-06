@@ -4,8 +4,10 @@ import { Settings } from 'lucide-react';
 import type {
   AppState,
   PromptItem,
-  ResponseItem
+  ResponseItem,
+  PromptSettings
 } from '@/types/app';
+import { DEFAULT_PROMPT_SETTINGS } from '@/types/app';
 import type { LLMProvider, LLMConfig } from '@/types/llm';
 import { DEFAULT_UI_STATE, type UIState } from '@/types/url-state';
 import { DEFAULT_PROVIDER_CONFIGS } from '@/types/llm';
@@ -13,12 +15,16 @@ import { storageService } from '@/services/storage';
 import { urlStateManager } from '@/services/url-state';
 import { llmProviderManager } from '@/services/llm';
 import { openaiProvider, anthropicProvider, geminiProvider } from '@/services/llm/providers';
+import { promptTemplateService } from '@/services/prompt-template';
 import { PromptGrid } from '@/components/layout';
 import { ResponseComparison } from '@/components/response';
 import { SimpleThemeToggle } from '@/components/ui';
-// Lazy load settings panel since it's only shown when needed
+// Lazy load settings panels since they're only shown when needed
 const LLMConfigurationPanel = React.lazy(() =>
   import('@/components/settings').then(module => ({ default: module.LLMConfigurationPanel }))
+);
+const PromptSettingsPanelComponent = React.lazy(() =>
+  import('@/components/settings').then(module => ({ default: module.PromptSettingsPanel }))
 );
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
@@ -57,6 +63,7 @@ const App: React.FC = () => {
       ],
       responses: [],
       config: null,
+      promptSettings: DEFAULT_PROMPT_SETTINGS,
       ui: {
         ...DEFAULT_UI_STATE,
         ...(urlState?.ui && Object.fromEntries(
@@ -147,11 +154,18 @@ const App: React.FC = () => {
   }, [state.prompts, state.config, state.ui]);
 
   // Action handlers
-  const addPrompt = useCallback((content: string = '', title?: string) => {
+  const addPrompt = useCallback((
+    content: string = '',
+    title?: string,
+    systemMessage?: string,
+    variables?: Record<string, string>
+  ) => {
     const newPrompt: PromptItem = {
       id: `prompt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       content,
       ...(title !== undefined && { title }),
+      ...(systemMessage !== undefined && { systemMessage }),
+      ...(variables !== undefined && { variables }),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -162,21 +176,41 @@ const App: React.FC = () => {
     }));
   }, []);
 
-  const updatePrompt = useCallback((id: string, content: string, title?: string) => {
+  const updatePrompt = useCallback((
+    id: string,
+    updates: Partial<Omit<PromptItem, 'id' | 'createdAt' | 'updatedAt'>>
+  ) => {
     setState(prev => ({
       ...prev,
       prompts: prev.prompts.map(prompt =>
         prompt.id === id
           ? {
               ...prompt,
-              content,
-              ...(title !== undefined && { title }),
+              ...updates,
               updatedAt: Date.now()
             }
           : prompt
       ),
     }));
   }, []);
+
+  const duplicatePrompt = useCallback((id: string) => {
+    const prompt = state.prompts.find(p => p.id === id);
+    if (!prompt) return;
+
+    const newPrompt: PromptItem = {
+      ...prompt,
+      id: `prompt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      ...(prompt.title ? { title: `${prompt.title} (copy)` } : {}),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    setState(prev => ({
+      ...prev,
+      prompts: [...prev.prompts, newPrompt],
+    }));
+  }, [state.prompts]);
 
   const removePrompt = useCallback((id: string) => {
     setState(prev => ({
@@ -201,6 +235,13 @@ const App: React.FC = () => {
     storageService.saveAPIKey(config.provider, config.apiKey);
   }, []);
 
+  const updatePromptSettings = useCallback((updates: Partial<PromptSettings>) => {
+    setState(prev => ({
+      ...prev,
+      promptSettings: { ...prev.promptSettings, ...updates },
+    }));
+  }, []);
+
   const updateUIState = useCallback((updates: Partial<UIState>) => {
     setState(prev => ({
       ...prev,
@@ -223,7 +264,30 @@ const App: React.FC = () => {
     }
 
     const prompt = state.prompts.find(p => p.id === promptId);
-    if (!prompt || !prompt.content.trim()) {
+    if (!prompt) {
+      return;
+    }
+
+    // Build the final prompt with template substitution
+    const systemMessage = state.promptSettings.sharedSystemMessage
+      ? state.promptSettings.globalSystemMessage
+      : (prompt.systemMessage || '');
+    
+    const userPromptTemplate = state.promptSettings.sharedUserPrompt
+      ? state.promptSettings.globalUserPrompt
+      : prompt.content;
+
+    // Apply variable substitution
+    const variables = prompt.variables || {};
+    const builtPrompt = promptTemplateService.buildPrompt(
+      systemMessage,
+      userPromptTemplate,
+      variables
+    );
+
+    // Validation check
+    if (!builtPrompt.user.trim()) {
+      setError('User prompt is empty after variable substitution');
       return;
     }
 
@@ -235,9 +299,15 @@ const App: React.FC = () => {
     }));
 
     try {
+      // Create config with the built system message
+      const configWithSystem: LLMConfig = {
+        ...state.config!,
+        systemMessage: builtPrompt.system,
+      };
+
       const requestResult = llmProviderManager.createRequest(
-        prompt.content,
-        state.config!
+        builtPrompt.user,
+        configWithSystem
       );
 
       if (!requestResult.success) {
@@ -357,9 +427,37 @@ const App: React.FC = () => {
       // Send all prompts concurrently
       const promises = promptsWithContent
         .map(async (prompt) => {
+          // Build the final prompt with template substitution
+          const systemMessage = state.promptSettings.sharedSystemMessage
+            ? state.promptSettings.globalSystemMessage
+            : (prompt.systemMessage || '');
+          
+          const userPromptTemplate = state.promptSettings.sharedUserPrompt
+            ? state.promptSettings.globalUserPrompt
+            : prompt.content;
+
+          // Apply variable substitution
+          const variables = prompt.variables || {};
+          const builtPrompt = promptTemplateService.buildPrompt(
+            systemMessage,
+            userPromptTemplate,
+            variables
+          );
+
+          // Skip if user prompt is empty
+          if (!builtPrompt.user.trim()) {
+            return;
+          }
+
+          // Create config with the built system message
+          const configWithSystem: LLMConfig = {
+            ...state.config!,
+            systemMessage: builtPrompt.system,
+          };
+
           const requestResult = llmProviderManager.createRequest(
-            prompt.content,
-            state.config!
+            builtPrompt.user,
+            configWithSystem
           );
 
           if (!requestResult.success) {
@@ -467,9 +565,11 @@ const App: React.FC = () => {
     actions: {
       addPrompt,
       updatePrompt,
+      duplicatePrompt,
       removePrompt,
       clearPrompts,
       setConfig,
+      updatePromptSettings,
       updateUIState,
       sendPrompts,
       sendSinglePrompt,
@@ -480,9 +580,11 @@ const App: React.FC = () => {
     state,
     addPrompt,
     updatePrompt,
+    duplicatePrompt,
     removePrompt,
     clearPrompts,
     setConfig,
+    updatePromptSettings,
     updateUIState,
     sendPrompts,
     sendSinglePrompt,
@@ -692,9 +794,12 @@ const App: React.FC = () => {
             <PromptGrid
               prompts={contextValue.prompts}
               responses={contextValue.responses}
+              promptSettings={contextValue.promptSettings}
               onPromptChange={updatePrompt}
               onPromptRemove={removePrompt}
               onPromptAdd={addPrompt}
+              onPromptDuplicate={duplicatePrompt}
+              onPromptSettingsChange={updatePromptSettings}
               onSendSinglePrompt={sendSinglePrompt}
               isLoading={contextValue.isLoading}
               config={contextValue.config}
@@ -727,6 +832,14 @@ const App: React.FC = () => {
                   />
                 </div>
               </div>
+              
+              <React.Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+                <PromptSettingsPanelComponent
+                  settings={contextValue.promptSettings}
+                  onSettingsChange={updatePromptSettings}
+                />
+              </React.Suspense>
+              
               <div>
                 <h3 className="text-lg font-medium mb-4">LLM Configuration</h3>
                 <React.Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>

@@ -6,8 +6,18 @@ export interface PromptItem {
   readonly id: string;
   readonly content: string;
   readonly title?: string;
+  readonly systemMessage?: string;
+  readonly variables?: Record<string, string>;
   readonly createdAt: number;
   readonly updatedAt: number;
+}
+
+export interface PromptSettings {
+  readonly sharedSystemMessage: boolean;
+  readonly sharedUserPrompt: boolean;
+  readonly globalSystemMessage: string;
+  readonly globalUserPrompt: string;
+  readonly globalVariables: Record<string, string>;
 }
 
 export interface ResponseItem {
@@ -21,17 +31,20 @@ export interface AppState {
   readonly prompts: ReadonlyArray<PromptItem>;
   readonly responses: ReadonlyArray<ResponseItem>;
   readonly config: LLMConfig | null;
+  readonly promptSettings: PromptSettings;
   readonly ui: UIState;
   readonly isLoading: boolean;
   readonly error: string | null;
 }
 
 export interface AppActions {
-  addPrompt: (content: string, title?: string) => void;
-  updatePrompt: (id: string, content: string, title?: string) => void;
+  addPrompt: (content: string, title?: string, systemMessage?: string, variables?: Record<string, string>) => void;
+  updatePrompt: (id: string, updates: Partial<Omit<PromptItem, 'id' | 'createdAt' | 'updatedAt'>>) => void;
+  duplicatePrompt: (id: string) => void;
   removePrompt: (id: string) => void;
   clearPrompts: () => void;
   setConfig: (config: LLMConfig) => void;
+  updatePromptSettings: (updates: Partial<PromptSettings>) => void;
   updateUIState: (updates: Partial<UIState>) => void;
   sendPrompts: () => Promise<void>;
   clearResponses: () => void;
@@ -75,9 +88,12 @@ export interface BaseComponentProps {
 export interface PromptGridProps extends BaseComponentProps {
   readonly prompts: ReadonlyArray<PromptItem>;
   readonly responses: ReadonlyArray<ResponseItem>;
-  readonly onPromptChange: (id: string, content: string, title?: string) => void;
+  readonly promptSettings: PromptSettings;
+  readonly onPromptChange: (id: string, updates: Partial<Omit<PromptItem, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   readonly onPromptRemove: (id: string) => void;
-  readonly onPromptAdd: (content?: string, title?: string) => void;
+  readonly onPromptAdd: (content?: string, title?: string, systemMessage?: string, variables?: Record<string, string>) => void;
+  readonly onPromptDuplicate: (id: string) => void;
+  readonly onPromptSettingsChange: (updates: Partial<PromptSettings>) => void;
   readonly onSendSinglePrompt?: (id: string) => void;
   readonly isLoading: boolean;
   readonly config?: LLMConfig | null;
@@ -88,6 +104,16 @@ export interface PromptGridProps extends BaseComponentProps {
 export interface SettingsPanelProps extends BaseComponentProps {
   readonly config: LLMConfig | null;
   readonly onConfigChange: (config: LLMConfig) => void;
+  readonly promptSettings: PromptSettings;
+  readonly onPromptSettingsChange: (updates: Partial<PromptSettings>) => void;
   readonly uiState: UIState;
   readonly onUIStateChange: (updates: Partial<UIState>) => void;
 }
+
+export const DEFAULT_PROMPT_SETTINGS: PromptSettings = {
+  sharedSystemMessage: true,
+  sharedUserPrompt: false,
+  globalSystemMessage: '',
+  globalUserPrompt: '',
+  globalVariables: {},
+} as const;
