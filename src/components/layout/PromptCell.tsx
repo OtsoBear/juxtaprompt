@@ -146,25 +146,28 @@ export const PromptCell: React.FC<PromptCellProps> = React.memo(({
   return (
     <Card
       className={`transition-all duration-200 ${isExpanded ? 'col-span-full' : ''} ${hasError ? 'border-destructive' : ''}`}
-      title={`${gridPosition.row},${gridPosition.col}`}
     >
       {/* Card Header */}
       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-1 pb-0">
         <div className="flex items-center space-x-1 w-full">
+          <Badge variant="outline" className="text-[10px] font-mono flex-shrink-0">
+            {gridPosition.row},{gridPosition.col}
+          </Badge>
           <Input
             value={prompt.title ?? ''}
             onChange={(e) => onPromptChange(prompt.id, { title: e.target.value })}
-            placeholder="title"
+            placeholder="nickname"
+            title="Give this cell a custom name"
             className="h-6 text-xs"
           />
-          <Badge className={`text-[10px] ${statusColor(status)} capitalize`} role="status">
+          <Badge className={`text-[10px] ${statusColor(status)} capitalize flex-shrink-0`} role="status">
             {status}
           </Badge>
           {typeof tokenCount === 'number' && (
-            <Badge variant="secondary" className="text-[10px]">tokens: {tokenCount}</Badge>
+            <Badge variant="secondary" className="text-[10px] flex-shrink-0">tokens: {tokenCount}</Badge>
           )}
           {typeof duration === 'number' && (
-            <Badge variant="secondary" className="text-[10px]">time: {duration}ms</Badge>
+            <Badge variant="secondary" className="text-[10px] flex-shrink-0">time: {duration}ms</Badge>
           )}
         </div>
         <div className="flex items-center space-x-1">

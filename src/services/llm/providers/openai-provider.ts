@@ -47,6 +47,24 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   /**
+   * Check if model is GPT-5 or reasoning model (o3, o4)
+   * These models have different API requirements
+   */
+  private isGPT5OrReasoningModel(modelId: string): boolean {
+    // Check for GPT-5 variants
+    if (modelId.startsWith('gpt-5') || modelId.startsWith('gpt5')) {
+      return true;
+    }
+    
+    // Check for o3 and o4 reasoning models
+    if (modelId.startsWith('o3') || modelId.startsWith('o4')) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
    * Create request body for OpenAI API
    */
   protected createRequestBody(request: LLMRequest): Record<string, unknown> {
@@ -66,27 +84,28 @@ export class OpenAIProvider extends BaseLLMProvider {
       content: request.prompt,
     });
 
-    // Determine if this is a chat model or completion model
-    const isChatModel = request.config.model.includes('chat') ||
-                       request.config.model.includes('gpt-4') ||
-                       request.config.model.includes('gpt-3.5') ||
-                       request.config.model.endsWith('-chat');
+    const isGPT5OrReasoning = this.isGPT5OrReasoningModel(request.config.model);
 
     const body: Record<string, unknown> = {
       model: request.config.model,
       messages,
-      temperature: request.config.temperature,
-      top_p: request.config.topP,
-      frequency_penalty: request.config.frequencyPenalty,
-      presence_penalty: request.config.presencePenalty,
       stream: true,
     };
 
+    // GPT-5 and reasoning models (o3, o4) don't support temperature or top_p
+    if (!isGPT5OrReasoning) {
+      body['temperature'] = request.config.temperature;
+      body['top_p'] = request.config.topP;
+      body['frequency_penalty'] = request.config.frequencyPenalty;
+      body['presence_penalty'] = request.config.presencePenalty;
+    }
+
     // Use appropriate token parameter based on model type
-    if (isChatModel) {
-      body['max_tokens'] = request.config.maxTokens;
-    } else {
+    // GPT-5 and reasoning models use max_completion_tokens
+    if (isGPT5OrReasoning) {
       body['max_completion_tokens'] = request.config.maxTokens;
+    } else {
+      body['max_tokens'] = request.config.maxTokens;
     }
 
     return body;
@@ -281,9 +300,11 @@ export class OpenAIProvider extends BaseLLMProvider {
       // Filter and map OpenAI models to our ModelInfo format
       const models: ModelInfo[] = data.data
         .filter((model: OpenAIModel) => {
-          // Only include chat completion models
+          // Include GPT models, reasoning models (o3/o4), and chat models
           return model.id && (
             model.id.startsWith('gpt-') ||
+            model.id.startsWith('o3') ||
+            model.id.startsWith('o4') ||
             model.id.includes('chat') ||
             model.id.includes('turbo')
           );
@@ -297,12 +318,15 @@ export class OpenAIProvider extends BaseLLMProvider {
           pricing: this.getModelPricing(model.id),
         }))
         .sort((a: ModelInfo, b: ModelInfo) => {
-          // Sort by preference: gpt-4o models first, then gpt-4, then gpt-3.5
+          // Sort by preference: GPT-5 first, reasoning models (o4/o3), then GPT-4o, GPT-4, GPT-3.5
           const getModelPriority = (id: string) => {
-            if (id.includes('gpt-4o')) return 1;
-            if (id.includes('gpt-4')) return 2;
-            if (id.includes('gpt-3.5')) return 3;
-            return 4;
+            if (id.startsWith('gpt-5') || id.startsWith('gpt5')) return 1;
+            if (id.startsWith('o4')) return 2;
+            if (id.startsWith('o3')) return 3;
+            if (id.includes('gpt-4o')) return 4;
+            if (id.includes('gpt-4')) return 5;
+            if (id.includes('gpt-3.5')) return 6;
+            return 7;
           };
           return getModelPriority(a.id) - getModelPriority(b.id);
         });
@@ -319,22 +343,65 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   protected getFallbackModels(): ModelInfo[] {
     return [
-      {
-        id: 'gpt-5-chat',
-        name: 'GPT-5 Chat',
-        description: 'Next generation chat model',
-        contextLength: 200000,
-        maxOutputTokens: 8192,
-        pricing: { input: 10.0, output: 30.0 },
-      },
+      // GPT-5 series
       {
         id: 'gpt-5',
         name: 'GPT-5',
-        description: 'Next generation flagship model',
+        description: 'Next generation flagship model with advanced reasoning',
         contextLength: 200000,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 100000,
         pricing: { input: 10.0, output: 30.0 },
       },
+      {
+        id: 'gpt-5-mini',
+        name: 'GPT-5 Mini',
+        description: 'Smaller, faster GPT-5 model',
+        contextLength: 200000,
+        maxOutputTokens: 100000,
+        pricing: { input: 3.0, output: 9.0 },
+      },
+      {
+        id: 'gpt-5-nano',
+        name: 'GPT-5 Nano',
+        description: 'Most affordable GPT-5 model',
+        contextLength: 200000,
+        maxOutputTokens: 100000,
+        pricing: { input: 1.0, output: 3.0 },
+      },
+      // Reasoning models (o3, o4 series)
+      {
+        id: 'o4',
+        name: 'o4',
+        description: 'Advanced reasoning model optimized for complex problem solving',
+        contextLength: 200000,
+        maxOutputTokens: 100000,
+        pricing: { input: 15.0, output: 45.0 },
+      },
+      {
+        id: 'o4-mini',
+        name: 'o4 Mini',
+        description: 'Smaller reasoning model for faster inference',
+        contextLength: 200000,
+        maxOutputTokens: 100000,
+        pricing: { input: 5.0, output: 15.0 },
+      },
+      {
+        id: 'o3',
+        name: 'o3',
+        description: 'High-performance reasoning model',
+        contextLength: 200000,
+        maxOutputTokens: 100000,
+        pricing: { input: 12.0, output: 36.0 },
+      },
+      {
+        id: 'o3-mini',
+        name: 'o3 Mini',
+        description: 'Efficient reasoning model',
+        contextLength: 200000,
+        maxOutputTokens: 100000,
+        pricing: { input: 4.0, output: 12.0 },
+      },
+      // GPT-4 series
       {
         id: 'gpt-4o',
         name: 'GPT-4o',
@@ -383,8 +450,16 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelDescription(modelId: string): string {
     const descriptions: Record<string, string> = {
-      'gpt-5-chat': 'Next generation chat model',
-      'gpt-5': 'Next generation flagship model',
+      // GPT-5 series
+      'gpt-5': 'Next generation flagship model with advanced reasoning',
+      'gpt-5-mini': 'Smaller, faster GPT-5 model',
+      'gpt-5-nano': 'Most affordable GPT-5 model',
+      // Reasoning models (o3, o4)
+      'o4': 'Advanced reasoning model optimized for complex problem solving',
+      'o4-mini': 'Smaller reasoning model for faster inference',
+      'o3': 'High-performance reasoning model',
+      'o3-mini': 'Efficient reasoning model',
+      // GPT-4 series
       'gpt-4o': 'Most advanced multimodal model',
       'gpt-4o-mini': 'Affordable and intelligent small model',
       'gpt-4-turbo': 'Previous generation flagship model',
@@ -399,8 +474,15 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelContextLength(modelId: string): number {
     const contextLengths: Record<string, number> = {
-      'gpt-5-chat': 200000,
+      // GPT-5 and reasoning models
       'gpt-5': 200000,
+      'gpt-5-mini': 200000,
+      'gpt-5-nano': 200000,
+      'o4': 200000,
+      'o4-mini': 200000,
+      'o3': 200000,
+      'o3-mini': 200000,
+      // GPT-4 series
       'gpt-4o': 128000,
       'gpt-4o-mini': 128000,
       'gpt-4-turbo': 128000,
@@ -415,8 +497,15 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelMaxOutputTokens(modelId: string): number {
     const maxOutputTokens: Record<string, number> = {
-      'gpt-5-chat': 8192,
-      'gpt-5': 8192,
+      // GPT-5 and reasoning models (higher limits)
+      'gpt-5': 100000,
+      'gpt-5-mini': 100000,
+      'gpt-5-nano': 100000,
+      'o4': 100000,
+      'o4-mini': 100000,
+      'o3': 100000,
+      'o3-mini': 100000,
+      // GPT-4 series
       'gpt-4o': 4096,
       'gpt-4o-mini': 16384,
       'gpt-4-turbo': 4096,
@@ -431,8 +520,16 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private getModelPricing(modelId: string): { input: number; output: number } {
     const pricing: Record<string, { input: number; output: number }> = {
-      'gpt-5-chat': { input: 10.0, output: 30.0 },
+      // GPT-5 series
       'gpt-5': { input: 10.0, output: 30.0 },
+      'gpt-5-mini': { input: 3.0, output: 9.0 },
+      'gpt-5-nano': { input: 1.0, output: 3.0 },
+      // Reasoning models (o3, o4)
+      'o4': { input: 15.0, output: 45.0 },
+      'o4-mini': { input: 5.0, output: 15.0 },
+      'o3': { input: 12.0, output: 36.0 },
+      'o3-mini': { input: 4.0, output: 12.0 },
+      // GPT-4 series
       'gpt-4o': { input: 5.0, output: 15.0 },
       'gpt-4o-mini': { input: 0.15, output: 0.6 },
       'gpt-4-turbo': { input: 10.0, output: 30.0 },

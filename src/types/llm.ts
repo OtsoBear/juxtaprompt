@@ -57,8 +57,13 @@ export interface LLMResponse {
 // Provider-specific model configurations
 export const PROVIDER_MODELS: Record<LLMProvider, ReadonlyArray<string>> = {
   openai: [
-    'gpt-5-chat',
     'gpt-5',
+    'gpt-5-mini',
+    'gpt-5-nano',
+    'o4',
+    'o4-mini',
+    'o3',
+    'o3-mini',
     'gpt-4o',
     'gpt-4o-mini',
     'gpt-4-turbo',
@@ -84,7 +89,7 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, Omit<LLMConfig, 'apiK
   openai: {
     provider: 'openai',
     baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-5-chat',
+    model: 'gpt-4o',
     temperature: 0.7,
     maxTokens: 2048,
     topP: 1.0,

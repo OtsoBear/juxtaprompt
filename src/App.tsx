@@ -321,39 +321,39 @@ const App: React.FC = () => {
         for await (const chunk of llmProviderManager.sendStreamingRequest(request)) {
           if (chunk.content) {
             fullContent += chunk.content;
-            
-            // Update response in real-time
-            setState(prev => {
-              const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
-                  const nowTs = Date.now();
-                  const response: ResponseItem = {
-                    id: `response-${prompt.id}`,
-                    promptId: prompt.id,
-                    response: {
-                      requestId: request.id,
-                      content: fullContent,
-                      isComplete: chunk.isComplete,
-                      isStreaming: !chunk.isComplete,
-                      metadata: {
-                        ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
-                        model: state.config!.model,
-                        provider: state.config!.provider,
-                        timestamp: nowTs,
-                        ...(chunk.isComplete ? { duration: nowTs - request.timestamp } : {}),
-                      },
-                    },
-                    createdAt: request.timestamp,
-                  };
-
-              if (existingIndex >= 0) {
-                const newResponses = [...prev.responses];
-                newResponses[existingIndex] = response;
-                return { ...prev, responses: newResponses };
-              } else {
-                return { ...prev, responses: [...prev.responses, response] };
-              }
-            });
           }
+          
+          // Update response in real-time (even for final empty chunks)
+          setState(prev => {
+            const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
+            const nowTs = Date.now();
+            const response: ResponseItem = {
+              id: `response-${prompt.id}`,
+              promptId: prompt.id,
+              response: {
+                requestId: request.id,
+                content: fullContent,
+                isComplete: chunk.isComplete,
+                isStreaming: !chunk.isComplete,
+                metadata: {
+                  ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
+                  model: state.config!.model,
+                  provider: state.config!.provider,
+                  timestamp: nowTs,
+                  ...(chunk.isComplete ? { duration: nowTs - request.timestamp } : {}),
+                },
+              },
+              createdAt: request.timestamp,
+            };
+
+            if (existingIndex >= 0) {
+              const newResponses = [...prev.responses];
+              newResponses[existingIndex] = response;
+              return { ...prev, responses: newResponses };
+            } else {
+              return { ...prev, responses: [...prev.responses, response] };
+            }
+          });
 
           if (chunk.isComplete) {
             break;
@@ -471,39 +471,39 @@ const App: React.FC = () => {
             for await (const chunk of llmProviderManager.sendStreamingRequest(request)) {
               if (chunk.content) {
                 fullContent += chunk.content;
-                
-                // Update response in real-time
-                setState(prev => {
-                  const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
-                  const nowTs = Date.now();
-                  const response: ResponseItem = {
-                    id: `response-${prompt.id}`,
-                    promptId: prompt.id,
-                    response: {
-                      requestId: request.id,
-                      content: fullContent,
-                      isComplete: chunk.isComplete,
-                      isStreaming: !chunk.isComplete,
-                      metadata: {
-                        ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
-                        model: state.config!.model,
-                        provider: state.config!.provider,
-                        timestamp: nowTs,
-                        ...(chunk.isComplete ? { duration: nowTs - request.timestamp } : {}),
-                      },
-                    },
-                    createdAt: request.timestamp,
-                  };
-
-                  if (existingIndex >= 0) {
-                    const newResponses = [...prev.responses];
-                    newResponses[existingIndex] = response;
-                    return { ...prev, responses: newResponses };
-                  } else {
-                    return { ...prev, responses: [...prev.responses, response] };
-                  }
-                });
               }
+              
+              // Update response in real-time (even for final empty chunks)
+              setState(prev => {
+                const existingIndex = prev.responses.findIndex(r => r.promptId === prompt.id);
+                const nowTs = Date.now();
+                const response: ResponseItem = {
+                  id: `response-${prompt.id}`,
+                  promptId: prompt.id,
+                  response: {
+                    requestId: request.id,
+                    content: fullContent,
+                    isComplete: chunk.isComplete,
+                    isStreaming: !chunk.isComplete,
+                    metadata: {
+                      ...(chunk.tokenCount !== undefined && { tokenCount: chunk.tokenCount }),
+                      model: state.config!.model,
+                      provider: state.config!.provider,
+                      timestamp: nowTs,
+                      ...(chunk.isComplete ? { duration: nowTs - request.timestamp } : {}),
+                    },
+                  },
+                  createdAt: request.timestamp,
+                };
+
+                if (existingIndex >= 0) {
+                  const newResponses = [...prev.responses];
+                  newResponses[existingIndex] = response;
+                  return { ...prev, responses: newResponses };
+                } else {
+                  return { ...prev, responses: [...prev.responses, response] };
+                }
+              });
 
               if (chunk.isComplete) {
                 break;
