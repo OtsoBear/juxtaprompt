@@ -34,7 +34,7 @@ export const PromptGrid: React.FC<PromptGridProps> = React.memo(({
   const maxHeight = uiState?.maxHeight ?? 6;
   const autoSend = uiState?.autoSend ?? false;
   const debounceMs = uiState?.debounceMs ?? 1000;
-  const pinnedIds = uiState?.comparePinnedIds ?? [];
+  const pinnedIds = useMemo(() => uiState?.comparePinnedIds ?? [], [uiState?.comparePinnedIds]);
 
   // Local UI state
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());

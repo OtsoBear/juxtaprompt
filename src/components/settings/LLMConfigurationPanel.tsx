@@ -101,7 +101,11 @@ export const LLMConfigurationPanel: React.FC<LLMConfigurationPanelProps> = React
   // Persist last selected provider for providerKey fallback
   useEffect(() => {
     if (formData.provider) {
-      try { localStorage.setItem('last_provider', formData.provider); } catch {}
+      try {
+        localStorage.setItem('last_provider', formData.provider);
+      } catch {
+        // Silently ignore localStorage errors (e.g., in private browsing mode)
+      }
     }
   }, [formData.provider]);
 

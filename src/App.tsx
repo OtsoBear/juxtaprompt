@@ -401,7 +401,7 @@ const App: React.FC = () => {
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unknown error occurred');
     }
-  }, [state.config, state.prompts, setError]);
+  }, [state.config, state.prompts, state.promptSettings.globalSystemMessage, state.promptSettings.globalUserPrompt, state.promptSettings.sharedSystemMessage, state.promptSettings.sharedUserPrompt, setError]);
 
   // Memoized expensive computations
   const promptsWithContent = useMemo(() =>
@@ -556,7 +556,7 @@ const App: React.FC = () => {
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [state.config, state.prompts, setError, clearResponses, promptsWithContent]);
+  }, [state.config, state.prompts, state.promptSettings.globalSystemMessage, state.promptSettings.globalUserPrompt, state.promptSettings.sharedSystemMessage, state.promptSettings.sharedUserPrompt, setError, clearResponses, promptsWithContent]);
 
 
   // Memoized context value
